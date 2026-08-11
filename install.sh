@@ -99,12 +99,13 @@ install_golang_latest() {
 
 ensure_repo() {
   INSTALL_DIR="/opt/space-lxd"
-  if [ -f "./scripts/build.sh" ]; then
+
+  if [ -f "./cmd/master/main.go" ] && [ -f "./scripts/build.sh" ]; then
     ROOT_DIR="$(pwd)"
     return
   fi
 
-  info "Skrip dijalankan via curl pipe. Mengklon repositori resmi ke ${INSTALL_DIR}..."
+  info "Mengklon/memperbarui repositori resmi di ${INSTALL_DIR}..."
   if ! command -v git >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
       sudo apt-get update && sudo apt-get install -y git || true
@@ -112,13 +113,21 @@ ensure_repo() {
       sudo dnf install -y git || true
     fi
   fi
+
   sudo mkdir -p "${INSTALL_DIR}"
   sudo chown -R ${USER}:${USER} "${INSTALL_DIR}" 2>/dev/null || true
+
   if [ -d "${INSTALL_DIR}/.git" ]; then
-    git -C "${INSTALL_DIR}" pull || true
+    git -C "${INSTALL_DIR}" fetch --all || true
+    git -C "${INSTALL_DIR}" reset --hard origin/main || true
+    git -C "${INSTALL_DIR}" pull origin main || true
   else
+    sudo rm -rf "${INSTALL_DIR}"
+    sudo mkdir -p "${INSTALL_DIR}"
+    sudo chown -R ${USER}:${USER} "${INSTALL_DIR}" 2>/dev/null || true
     git clone https://github.com/rizkykr/space-lxd.git "${INSTALL_DIR}"
   fi
+
   ROOT_DIR="${INSTALL_DIR}"
   cd "${ROOT_DIR}"
 }
@@ -136,11 +145,21 @@ build_project() {
   install_node_lts
   install_golang_latest
 
-  info "Kompilasi dari source code..."
+  info "Kompilasi dari source code di ${ROOT_DIR}..."
   cd "${ROOT_DIR}"
   export PATH=$PATH:/usr/local/go/bin
-  chmod +x "${ROOT_DIR}/scripts/build.sh"
-  "${ROOT_DIR}/scripts/build.sh" || error "Gagal membuat biner Space LXD."
+
+  if [ -d "${ROOT_DIR}/web" ] && command -v npm >/dev/null 2>&1; then
+    info "Building React Frontend UI..."
+    (cd "${ROOT_DIR}/web" && npm install && npm run build)
+  fi
+
+  info "Building Master & Agent Go Binaries..."
+  mkdir -p "${ROOT_DIR}/bin"
+  go build -o "${ROOT_DIR}/bin/lxd-manager-master" "${ROOT_DIR}/cmd/master"
+  go build -o "${ROOT_DIR}/bin/lxd-manager-agent" "${ROOT_DIR}/cmd/agent"
+  cp "${ROOT_DIR}/bin/lxd-manager-agent" "${ROOT_DIR}/lxd-manager-agent" 2>/dev/null || true
+  success "Biner Space LXD berhasil dibuat!"
 }
 
 setup_systemd() {
