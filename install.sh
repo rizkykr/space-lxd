@@ -59,6 +59,42 @@ check_lxd() {
   fi
 }
 
+install_node_lts() {
+  if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+    success "Node.js terdeteksi: $(node -v)"
+    return
+  fi
+  info "Menginstall Node.js versi LTS resmi (via NodeSource)..."
+  if command -v apt-get >/dev/null 2>&1; then
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - || true
+    sudo apt-get install -y nodejs || true
+    success "Node.js LTS berhasil terpasang: $(node -v 2>/dev/null || echo 'OK')"
+  fi
+}
+
+install_golang_latest() {
+  if command -v go >/dev/null 2>&1; then
+    success "Go compiler terdeteksi: $(go version)"
+    return
+  fi
+  info "Menginstall Go (Golang) rilis resmi terbaru dari go.dev..."
+  ARCH="amd64"
+  if [ "$(uname -m)" = "aarch64" ]; then ARCH="arm64"; fi
+
+  GO_VER=$(curl -s https://go.dev/VERSION?m=text | head -n1)
+  GO_VER=${GO_VER:-"go1.23.0"}
+
+  info "Mendownload ${GO_VER}.linux-${ARCH}.tar.gz dari official go.dev..."
+  curl -fsSL "https://go.dev/dl/${GO_VER}.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz
+  sudo rm -rf /usr/local/go
+  sudo tar -C /usr/local -xzf /tmp/go.tar.gz
+  export PATH=$PATH:/usr/local/go/bin
+  if ! grep -q "/usr/local/go/bin" ~/.bashrc 2>/dev/null; then
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+  fi
+  success "Go compiler (${GO_VER}) berhasil terpasang!"
+}
+
 build_project() {
   info "Memeriksa biner dan aset Space LXD Dashboard..."
   ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -69,18 +105,12 @@ build_project() {
     return
   fi
 
-  if command -v go >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
-    info "Kompilasi ulang dari source code (Go & Node.js terdeteksi)..."
-    ./scripts/build.sh
-  elif [ -f "bin/lxd-manager-master" ]; then
-    success "Biner pre-built terdeteksi di bin/lxd-manager-master."
-  else
-    warn "Go / Node.js tidak ditemukan, menginstall dependensi kompilasi dasar..."
-    if command -v apt-get >/dev/null 2>&1; then
-      sudo apt-get update && sudo apt-get install -y golang nodejs npm || true
-    fi
-    ./scripts/build.sh || error "Gagal membuat biner. Harap install Go (golang) dan Node.js."
-  fi
+  install_node_lts
+  install_golang_latest
+
+  info "Kompilasi dari source code..."
+  export PATH=$PATH:/usr/local/go/bin
+  ./scripts/build.sh || error "Gagal membuat biner Space LXD."
 }
 
 setup_systemd() {
