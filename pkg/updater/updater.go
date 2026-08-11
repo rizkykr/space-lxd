@@ -96,16 +96,20 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 		repoPath, _ = os.Getwd()
 	}
 
+	env := append(os.Environ(), "PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:"+os.Getenv("PATH"))
+
 	logFn(fmt.Sprintf("📦 Pulling update terbaru dari GitHub 'rizkykr/space-lxd' di %s...", repoPath))
 
 	fetchCmd := exec.Command("git", "fetch", "--all")
 	fetchCmd.Dir = repoPath
+	fetchCmd.Env = env
 	if out, err := fetchCmd.CombinedOutput(); err != nil {
 		logFn(fmt.Sprintf("⚠️ Warning git fetch: %s", string(out)))
 	}
 
 	resetCmd := exec.Command("git", "reset", "--hard", "origin/main")
 	resetCmd.Dir = repoPath
+	resetCmd.Env = env
 	if out, err := resetCmd.CombinedOutput(); err != nil {
 		logFn(fmt.Sprintf("❌ Error git reset: %s", string(out)))
 		return fmt.Errorf("git reset failed: %v", err)
@@ -115,6 +119,7 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 	logFn("🔨 Mengompilasi React UI & Biner Go...")
 	buildCmd := exec.Command("./scripts/build.sh")
 	buildCmd.Dir = repoPath
+	buildCmd.Env = env
 	if out, err := buildCmd.CombinedOutput(); err != nil {
 		logFn(fmt.Sprintf("❌ Error build.sh: %s", string(out)))
 		return fmt.Errorf("build failed: %v", err)
@@ -124,6 +129,7 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 	logFn("🔄 Merekonstruksi Service Daemon...")
 	restartCmd := exec.Command("sudo", "systemctl", "restart", "lxd-manager-master")
 	restartCmd.Dir = repoPath
+	restartCmd.Env = env
 	_ = restartCmd.Run()
 
 	logFn("🎉 UPDATE SELESAI! Space LXD Dashboard telah diperbarui ke versi terbaru.")
