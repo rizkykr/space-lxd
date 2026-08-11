@@ -1,22 +1,19 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { Card, Button } from '../ui/primitives';
 import { Terminal as XTerminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { X, Terminal } from 'lucide-react';
 
-export function TerminalModal({ target, onClose }) {
+const TerminalPane = memo(function TerminalPane({ name }) {
   const containerRef = useRef(null);
   const termRef = useRef(null);
   const socketRef = useRef(null);
-  const fitAddonRef = useRef(null);
-
-  const targetName = target?.name;
+  const mountedRef = useRef(false);
 
   useEffect(() => {
-    if (!targetName || !containerRef.current) return;
-
-    if (termRef.current) return;
+    if (!name || !containerRef.current || mountedRef.current) return;
+    mountedRef.current = true;
 
     const term = new XTerminal({
       cursorBlink: true,
@@ -26,33 +23,46 @@ export function TerminalModal({ target, onClose }) {
         background: '#090d16',
         foreground: '#10b981',
         cursor: '#38bdf8'
-      }
+      },
+      scrollback: 5000,
     });
     termRef.current = term;
 
     const fitAddon = new FitAddon();
-    fitAddonRef.current = fitAddon;
     term.loadAddon(fitAddon);
     term.open(containerRef.current);
 
-    setTimeout(() => {
-      try {
-        fitAddon.fit();
-      } catch (e) {}
-    }, 150);
+    const fitTimer = setTimeout(() => {
+      try { fitAddon.fit(); } catch (e) {}
+    }, 200);
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(targetName)}`;
-    const socket = new WebSocket(wsUrl);
-    socketRef.current = socket;
+    function connectWS() {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(name)}`;
+      const socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
 
-    socket.onopen = () => {
-      term.write(`\r\n\x1b[32m🚀 Connected to LXD terminal shell for '${targetName}'...\x1b[0m\r\n\r\n`);
-    };
+      socket.onopen = () => {
+        term.write(`\r\n\x1b[32m🚀 Connected to LXD terminal shell for '${name}'...\x1b[0m\r\n\r\n`);
+      };
 
-    socket.onmessage = (event) => term.write(event.data);
-    socket.onclose = () => term.write('\r\n\x1b[31m[Terminal session closed]\x1b[0m\r\n');
-    socket.onerror = () => term.write('\r\n\x1b[31m[WebSocket connection error]\x1b[0m\r\n');
+      socket.onmessage = (event) => {
+        if (termRef.current) term.write(event.data);
+      };
+
+      socket.onclose = () => {
+        if (mountedRef.current) {
+          term.write('\r\n\x1b[33m⚠ Connection lost. Reconnecting in 3s...\x1b[0m\r\n');
+          setTimeout(() => {
+            if (mountedRef.current) connectWS();
+          }, 3000);
+        }
+      };
+
+      socket.onerror = () => {};
+    }
+
+    connectWS();
 
     const dataDisposable = term.onData((data) => {
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -61,16 +71,17 @@ export function TerminalModal({ target, onClose }) {
     });
 
     const handleResize = () => {
-      try {
-        fitAddon.fit();
-      } catch (e) {}
+      try { fitAddon.fit(); } catch (e) {}
     };
     window.addEventListener('resize', handleResize);
 
     return () => {
+      mountedRef.current = false;
+      clearTimeout(fitTimer);
       dataDisposable.dispose();
       window.removeEventListener('resize', handleResize);
       if (socketRef.current) {
+        socketRef.current.onclose = null;
         socketRef.current.close();
         socketRef.current = null;
       }
@@ -79,8 +90,12 @@ export function TerminalModal({ target, onClose }) {
         termRef.current = null;
       }
     };
-  }, [targetName]);
+  }, [name]);
 
+  return <div ref={containerRef} className="w-full h-full p-2" />;
+});
+
+export function TerminalModal({ target, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
       <Card className="max-w-4xl w-full h-[600px] flex flex-col shadow-2xl relative bg-[#090d16] border-border overflow-hidden">
@@ -94,8 +109,8 @@ export function TerminalModal({ target, onClose }) {
             <X className="size-4" />
           </Button>
         </div>
-        <div className="flex-1 w-full h-full relative overflow-hidden">
-          <div ref={containerRef} className="w-full h-full p-2" />
+        <div className="flex-1 w-full h-full relative overflow-hidden bg-[#090d16]">
+          <TerminalPane name={target?.name} />
         </div>
       </Card>
     </div>

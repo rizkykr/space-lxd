@@ -789,15 +789,48 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// Use a mutex to protect concurrent WebSocket writes
+	var wsMu sync.Mutex
+
+	// Configure WebSocket keepalive: ping every 25s, timeout after 60s
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	// Goroutine: send ping frames every 25 seconds
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(25 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				wsMu.Lock()
+				err := conn.WriteMessage(websocket.PingMessage, nil)
+				wsMu.Unlock()
+				if err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	// Pipe PTY stdout -> WebSocket client
 	go func() {
-		buf := make([]byte, 2048)
+		buf := make([]byte, 4096)
 		for {
 			n, err := ptmx.Read(buf)
 			if err != nil {
 				break
 			}
-			if err := conn.WriteMessage(websocket.TextMessage, buf[:n]); err != nil {
+			wsMu.Lock()
+			writeErr := conn.WriteMessage(websocket.TextMessage, buf[:n])
+			wsMu.Unlock()
+			if writeErr != nil {
 				break
 			}
 		}
@@ -811,6 +844,7 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = ptmx.Write(msg)
 	}
+	close(done)
 }
 
 func (s *Server) handleServeJoinScript(w http.ResponseWriter, r *http.Request) {
