@@ -71,13 +71,36 @@ PORT=9090 ./bin/lxd-manager-master
 
 ---
 
+## 💻 Interactive Terminal CLI (`space-lxd`)
+
+Space LXD Dashboard menyediakan **Menu CLI Interaktif Terminal** yang dapat diakses langsung dari mana saja di terminal Anda:
+
+```bash
+# Buka Menu CLI Interaktif di terminal
+space-lxd
+
+# Perintah Langsung (CLI Quick Commands):
+space-lxd status    # Cek status kesehatan service & port API
+space-lxd start     # Memulai layanan Master
+space-lxd stop      # Menghentikan layanan
+space-lxd restart   # Restart layanan
+space-lxd list      # Tampilkan list LXD container aktif
+space-lxd shell     # Hubungkan langsung ke terminal container (lxc exec)
+space-lxd logs      # Tampilkan streaming log realtime (journalctl / file log)
+space-lxd rebuild   # Rebuild React UI & Go binaries
+```
+
+---
+
 ## 📜 Utility Scripts Reference
 
 Direktori `scripts/` menyediakan skrip utilitas untuk pengelolaan aplikasi:
 
 | Script | Deskripsi |
 | :--- | :--- |
+| `space-lxd` | Perintah CLI Interaktif Terminal di `/usr/local/bin/space-lxd`. |
 | `./install.sh` | Skrip instalasi otomatis dan setup Systemd Service. |
+| `./scripts/space-lxd-cli.sh` | Engine utama untuk Menu CLI Terminal `space-lxd`. |
 | `./scripts/build.sh` | Mengompilasi React UI (`npm run build`) dan Go binaries. |
 | `./scripts/start.sh` | Memulai layanan Master secara background / Systemd. |
 | `./scripts/stop.sh` | Menghentikan proses Master & Worker Agent. |

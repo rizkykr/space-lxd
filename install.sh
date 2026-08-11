@@ -107,6 +107,11 @@ EOF
   sudo systemctl enable lxd-manager-master
   sudo systemctl restart lxd-manager-master
   success "Systemd Service 'lxd-manager-master' berhasil diaktifkan dan dijalankan!"
+
+  info "Memasang perintah CLI Interaktif 'space-lxd' di /usr/local/bin/space-lxd..."
+  sudo chmod +x "${ROOT_DIR}/scripts/space-lxd-cli.sh"
+  sudo ln -sf "${ROOT_DIR}/scripts/space-lxd-cli.sh" /usr/local/bin/space-lxd || true
+  success "Perintah 'space-lxd' berhasil terpasang di terminal!"
 }
 
 summary() {
@@ -119,11 +124,14 @@ summary() {
   echo -e "  🌐 Master Web Dashboard: ${COLOR_GREEN}http://${LOCAL_IP}:${PORT}${COLOR_RESET}"
   echo -e "  🖥️ Local Fallback URL:  ${COLOR_CYAN}http://localhost:${PORT}${COLOR_RESET}"
   echo ""
+  echo -e "  💻 ${COLOR_BOLD}CLI Interaktif Terminal:${COLOR_RESET}"
+  echo -e "    Ketik ${COLOR_GREEN}space-lxd${COLOR_RESET} di mana saja pada terminal untuk membuka Menu CLI Interaktif!"
+  echo ""
   echo -e "  ${COLOR_BOLD}Status Service Commands:${COLOR_RESET}"
   echo -e "    • Systemd status: ${COLOR_YELLOW}sudo systemctl status lxd-manager-master${COLOR_RESET}"
-  echo -e "    • Cek status:     ${COLOR_YELLOW}./scripts/status.sh${COLOR_RESET}"
-  echo -e "    • Stop service:   ${COLOR_YELLOW}./scripts/stop.sh${COLOR_RESET}"
-  echo -e "    • Start service:  ${COLOR_YELLOW}./scripts/start.sh${COLOR_RESET}"
+  echo -e "    • Cek status:     ${COLOR_YELLOW}space-lxd status${COLOR_RESET} atau ${COLOR_YELLOW}./scripts/status.sh${COLOR_RESET}"
+  echo -e "    • Stop service:   ${COLOR_YELLOW}space-lxd stop${COLOR_RESET} atau ${COLOR_YELLOW}./scripts/stop.sh${COLOR_RESET}"
+  echo -e "    • Start service:  ${COLOR_YELLOW}space-lxd start${COLOR_RESET} atau ${COLOR_YELLOW}./scripts/start.sh${COLOR_RESET}"
   echo ""
   echo "======================================================"
 }
