@@ -1,0 +1,201 @@
+import React, { useState } from 'react';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
+import { Card, Button, Badge, Input } from '../components/ui/primitives';
+import { TerminalModal } from '../components/modals/TerminalModal';
+import { ConfirmDialog } from '../components/modals/ConfirmDialog';
+import { Plus, ChevronRight, Layers, Sliders, Terminal, Square, Play, Trash2, Loader2 } from 'lucide-react';
+
+export function NodeLXDsPage() {
+  const { nodeId } = useParams();
+  const navigate = useNavigate();
+  const { nodes, fetchNodes, addToast, onOpenCreateLXD } = useOutletContext();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTerminalTarget, setActiveTerminalTarget] = useState(null);
+  const [loadingAction, setLoadingAction] = useState('');
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+
+  const targetNode = nodes.find(n => n.id === nodeId) || nodes[0];
+  const nodeLXDs = targetNode?.lxds || targetNode?.instances || [];
+
+  const filteredLXDs = nodeLXDs.filter(item => {
+    return item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           (item.ipv4 && item.ipv4.includes(searchTerm));
+  });
+
+  const handleLXDAction = async (action, lxdName) => {
+    setLoadingAction(`${action}_${lxdName}`);
+    try {
+      const res = await fetch(`/api/nodes/${nodeId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, name: lxdName })
+      });
+      if (res.ok) {
+        addToast('success', `LXD '${lxdName}' berhasil di-${action}`);
+        fetchNodes();
+      } else {
+        addToast('error', await res.text());
+      }
+    } catch (e) {
+      addToast('error', "Error: " + e.message);
+    } finally {
+      setLoadingAction('');
+      setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null });
+    }
+  };
+
+  const promptDeleteLXD = (lxdName) => {
+    setConfirmModal({
+      isOpen: true,
+      title: `Hapus LXD Container '${lxdName}'`,
+      message: `Apakah Anda yakin ingin menghapus LXD Container '${lxdName}' di Node ${targetNode?.name || nodeId}? Semua data dan memori di dalam container ini akan dihapus secara permanen.`,
+      requireMatchText: lxdName,
+      onConfirm: () => handleLXDAction('delete', lxdName)
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header & Breadcrumb */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground mb-1">
+            <span className="cursor-pointer hover:underline text-primary" onClick={() => navigate('/nodes')}>Node Servers</span>
+            <ChevronRight className="size-3" />
+            <span className="text-foreground font-bold">{targetNode?.name || nodeId}</span>
+          </div>
+          <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
+            <span>Node: {targetNode?.name || nodeId}</span>
+            {targetNode?.is_master ? <Badge variant="info">MASTER NODE</Badge> : <Badge variant="secondary">WORKER NODE</Badge>}
+            <Badge variant={targetNode?.status === 'online' ? 'success' : 'secondary'}>
+              {targetNode?.status?.toUpperCase() || 'ONLINE'}
+            </Badge>
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button onClick={onOpenCreateLXD}>
+            <Plus className="size-4" data-icon="inline-start" />
+            <span>Create LXD Container</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Node Health Quick Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+        <Card className="p-4 space-y-1">
+          <p className="text-[11px] text-muted-foreground uppercase">IP Address</p>
+          <p className="text-base font-bold text-foreground">{targetNode?.ip || '127.0.0.1'}</p>
+        </Card>
+        <Card className="p-4 space-y-1">
+          <p className="text-[11px] text-muted-foreground uppercase">RAM Usage</p>
+          <p className="text-base font-bold text-purple-400">
+            {targetNode ? `${(targetNode.ram_used_mb / 1024).toFixed(1)} / ${(targetNode.ram_total_mb / 1024).toFixed(1)} GB` : '—'}
+          </p>
+        </Card>
+        <Card className="p-4 space-y-1">
+          <p className="text-[11px] text-muted-foreground uppercase">Active LXD Containers</p>
+          <p className="text-base font-bold text-primary">{nodeLXDs.length} LXDs</p>
+        </Card>
+      </div>
+
+      {/* LXDs Search & Table */}
+      <Card className="p-3.5 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+          <Layers className="size-4 text-primary" />
+          <span>LXD Containers List ({filteredLXDs.length})</span>
+        </h2>
+
+        <Input
+          type="text"
+          placeholder="Cari container name, IP..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full sm:w-64"
+        />
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-border text-[11px] font-mono text-muted-foreground uppercase tracking-wider bg-background">
+                <th className="py-3.5 px-4">Container Name</th>
+                <th className="py-3.5 px-4">Status</th>
+                <th className="py-3.5 px-4">IPv4 Address</th>
+                <th className="py-3.5 px-4">RAM Allocation</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border text-xs font-sans">
+              {filteredLXDs.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-12 text-muted-foreground font-mono">
+                    Belum ada container LXD di Node ini. Klik 'Create LXD Container' untuk menambahkan.
+                  </td>
+                </tr>
+              ) : (
+                filteredLXDs.map((item, idx) => {
+                  const isRunning = item.status.toLowerCase() === 'running';
+                  const isItemLoading = loadingAction.endsWith(`_${item.name}`);
+
+                  return (
+                    <tr key={`${nodeId}-${item.name}-${idx}`} className="hover:bg-accent/50 transition cursor-pointer" onClick={() => navigate(`/lxds/${nodeId}/${item.name}`)}>
+                      <td className="py-3.5 px-4 font-bold text-foreground flex items-center gap-2">
+                        <span className={`size-2 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-muted-foreground'}`}></span>
+                        <span className="hover:underline text-primary">{item.name}</span>
+                      </td>
+                      <td className="py-3.5 px-4 font-mono">
+                        <span className={isRunning ? 'text-emerald-400 font-bold' : 'text-muted-foreground'}>{item.status}</span>
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-foreground">{item.ipv4 || '—'}</td>
+                      <td className="py-3.5 px-4 font-mono text-foreground">{item.ram_used_mb ? `${item.ram_used_mb} MB` : '—'}</td>
+                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button variant="ghost" size="icon" onClick={() => navigate(`/lxds/${nodeId}/${item.name}`)} title="Inspect Full LXD Detail Page">
+                            <Sliders className="size-3.5 text-muted-foreground" />
+                          </Button>
+                          {isRunning ? (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => setActiveTerminalTarget(item)} title="Terminal Shell">
+                                <Terminal className="size-3.5 text-primary" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleLXDAction('stop', item.name)} disabled={isItemLoading} title="Stop LXD">
+                                {loadingAction === `stop_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 text-amber-400" />}
+                              </Button>
+                            </>
+                          ) : (
+                            <Button variant="ghost" size="icon" onClick={() => handleLXDAction('start', item.name)} disabled={isItemLoading} title="Start LXD">
+                              {loadingAction === `start_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 text-emerald-400" />}
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" onClick={() => promptDeleteLXD(item.name)} disabled={isItemLoading} title="Delete LXD">
+                            {loadingAction === `delete_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5 text-destructive" />}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {activeTerminalTarget && (
+        <TerminalModal target={{ ...activeTerminalTarget, node_name: targetNode?.name || nodeId }} onClose={() => setActiveTerminalTarget(null)} />
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        requireMatchText={confirmModal.requireMatchText}
+        loading={!!loadingAction}
+        onConfirm={confirmModal.onConfirm}
+        onClose={() => setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })}
+      />
+    </div>
+  );
+}

@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# LXD Manager Agent Installer & Multi-Node Join Script
+# Usage:
+#   curl -sSL http://master-url/join.sh | sudo bash -s -- --master http://master-url --token YOUR_TOKEN --name "Worker-01"
+
+set -e
+
+R=$'\033[0m'; BD=$'\033[1m'
+GRN=$'\033[38;5;42m'; CYN=$'\033[38;5;45m'; YLW=$'\033[38;5;220m'
+RED=$'\033[38;5;196m'; DIM=$'\033[38;5;240m'
+
+MASTER_URL=""
+TOKEN=""
+NODE_NAME="$(hostname)"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --master) MASTER_URL="$2"; shift 2 ;;
+    --token)  TOKEN="$2"; shift 2 ;;
+    --name)   NODE_NAME="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+if [[ $EUID -ne 0 ]]; then
+  echo "${RED}Error: Script ini harus dijalankan sebagai root (sudo bash)${R}"
+  exit 1
+fi
+
+if [[ -z "$MASTER_URL" || -z "$TOKEN" ]]; then
+  echo "${RED}Error: Parameter --master dan --token wajib diisi.${R}"
+  echo "Penggunaan: curl -sSL http://master:9090/join.sh | sudo bash -s -- --master http://master:9090 --token <TOKEN>"
+  exit 1
+fi
+
+echo "${CYN}${BD}🪐 SPACE LXD AGENT INSTALLER${R}"
+echo "--------------------------------------------------------"
+echo "  Master URL : ${MASTER_URL}"
+echo "  Node Name  : ${NODE_NAME}"
+echo "--------------------------------------------------------"
+
+# ── Step 0: Deteksi & Self-Healing Inisialisasi LXD Daemon ──────────────────────
+echo "${DIM}[1/5] Memeriksa keberadaan daemon LXD...${R}"
+if ! command -v lxc &>/dev/null; then
+  echo "${YLW}⚠ LXD belum terpasang di node ini. Menginstall LXD via snap...${R}"
+  if command -v snap &>/dev/null; then
+    snap install lxd || true
+    lxd init --auto || true
+  elif command -v apt-get &>/dev/null; then
+    apt-get update && apt-get install -y snapd
+    snap install lxd || true
+    lxd init --auto || true
+  else
+    echo "${RED}✗ Gagal menginstall LXD secara otomatis. Pasang LXD terlebih dahulu.${R}"
+    exit 1
+  fi
+else
+  echo "${GRN}✓ LXD Daemon terdeteksi (${$(lxc --version 2>/dev/null || echo "ok")}).${R}"
+fi
+
+NODE_ID="node_$(cat /etc/machine-id 2>/dev/null || date +%s | cut -c1-10)"
+
+# ── Step 1: Verification & Token Exchange ──────────────────────────────────────
+echo "${DIM}[2/5] Verifikasi registrasi token dengan Master...${R}"
+REG_RESP=$(curl -s -f -X POST "${MASTER_URL}/api/nodes/register" \
+  -H "Content-Type: application/json" \
+  -d "{\"token\": \"${TOKEN}\", \"node_id\": \"${NODE_ID}\", \"node_name\": \"${NODE_NAME}\"}" || echo "")
+
+if [[ -z "$REG_RESP" ]]; then
+  echo "${RED}✗ Registrasi gagal. Token tidak valid atau Master tidak dapat dijangkau di ${MASTER_URL}${R}"
+  exit 1
+fi
+
+SECRET_TOKEN=$(echo "$REG_RESP" | grep -o '"secret_token":"[^"]*' | cut -d'"' -f4 || echo "")
+if [[ -z "$SECRET_TOKEN" ]]; then
+  SECRET_TOKEN="${TOKEN}"
+fi
+
+echo "${GRN}✓ Registrasi berhasil! Node ID: ${NODE_ID}${R}"
+
+# ── Step 2: Directories & Agent Env Setup ─────────────────────────────────────
+echo "${DIM}[3/5] Menyiapkan direktori & file konfigurasi aman...${R}"
+mkdir -p /etc/lxd-manager /usr/local/bin
+
+cat > /etc/lxd-manager/agent.env << EOF
+MASTER_URL="${MASTER_URL}"
+NODE_ID="${NODE_ID}"
+NODE_NAME="${NODE_NAME}"
+AGENT_SECRET="${SECRET_TOKEN}"
+LXD_SOCKET="/var/snap/lxd/common/lxd/unix.socket"
+EOF
+
+chmod 600 /etc/lxd-manager/agent.env
+
+# ── Step 3: Agent Binary Download ──────────────────────────────────────────────
+echo "${DIM}[4/5] Mendownload binary lxd-manager-agent dari Master...${R}"
+curl -sSL -f "${MASTER_URL}/downloads/lxd-manager-agent" -o /usr/local/bin/lxd-manager-agent 2>/dev/null || {
+  echo "${YLW}⚠ Binary tidak ditemukan di master downloads. Menggunakan binary lokal jika ada...${R}"
+  if [[ -f "./lxd-manager-agent" ]]; then
+    cp ./lxd-manager-agent /usr/local/bin/lxd-manager-agent
+  elif [[ -f "./bin/lxd-manager-agent" ]]; then
+    cp ./bin/lxd-manager-agent /usr/local/bin/lxd-manager-agent
+  fi
+}
+
+chmod +x /usr/local/bin/lxd-manager-agent
+
+# ── Step 4: Systemd Service Installation & Auto-Start ──────────────────────────
+echo "${DIM}[5/5] Memasang & mengaktifkan Systemd Auto-Recovery Service...${R}"
+cat > /etc/systemd/system/lxd-manager-agent.service << EOF
+[Unit]
+Description=Space LXD Worker Agent Node
+After=network-online.target lxd.service
+Wants=network-online.target lxd.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/lxd-manager/agent.env
+ExecStart=/usr/local/bin/lxd-manager-agent
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now lxd-manager-agent 2>/dev/null || true
+
+echo "--------------------------------------------------------"
+echo "${GRN}${BD}✅ BERHASIL JOIN CLUSTER!${R}"
+echo "  Worker node '${NODE_NAME}' sekarang aktif dan terhubung ke Master."
+echo "  Service Status : systemctl status lxd-manager-agent"
+echo "--------------------------------------------------------"
