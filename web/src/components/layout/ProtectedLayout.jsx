@@ -4,14 +4,23 @@ import { Sidebar } from './Sidebar';
 import { TopHeader } from './TopHeader';
 import { AddNodeModal } from '../modals/AddNodeModal';
 import { CreateLXDModal } from '../modals/CreateLXDModal';
+import { WelcomeModal } from '../modals/WelcomeModal';
 import { AlertCircle, Check } from 'lucide-react';
 
 export function ProtectedLayout({ user, onLogout }) {
   const [nodes, setNodes] = useState([]);
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [showCreateLXDModal, setShowCreateLXDModal] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [joinTokenData, setJoinTokenData] = useState(null);
   const [toasts, setToasts] = useState([]);
+
+  useEffect(() => {
+    const hasSeenWelcome = localStorage.getItem('space_lxd_welcome_seen');
+    if (!hasSeenWelcome) {
+      setShowWelcomeModal(true);
+    }
+  }, []);
 
   const addToast = (type, message) => {
     const id = Date.now();
@@ -93,6 +102,10 @@ export function ProtectedLayout({ user, onLogout }) {
       </div>
 
       {/* Modals */}
+      {showWelcomeModal && (
+        <WelcomeModal onClose={() => setShowWelcomeModal(false)} />
+      )}
+
       {showAddNodeModal && joinTokenData && (
         <AddNodeModal joinTokenData={joinTokenData} onClose={() => setShowAddNodeModal(false)} />
       )}
