@@ -151,6 +151,13 @@ quick_create() {
   read -p "Tekan Enter untuk kembali..."
 }
 
+clean_uninstall() {
+  banner
+  cd "$ROOT_DIR"
+  ./scripts/uninstall.sh
+  exit 0
+}
+
 interactive_menu() {
   while true; do
     banner
@@ -163,9 +170,10 @@ interactive_menu() {
     echo -e "  ${COLOR_BOLD}[7]${COLOR_RESET} 🖥️ Connect LXD Terminal Shell"
     echo -e "  ${COLOR_BOLD}[8]${COLOR_RESET} 📄 View Realtime Service Logs"
     echo -e "  ${COLOR_BOLD}[9]${COLOR_RESET} 🔨 Rebuild React UI & Go Binaries"
+    echo -e "  ${COLOR_BOLD}[10]${COLOR_RESET} 🗑️ Clean Uninstall & Purge All Data (Total Reset)"
     echo -e "  ${COLOR_BOLD}[0]${COLOR_RESET} 🚪 Exit CLI Menu"
     echo "======================================================"
-    read -p "Pilihan Anda [0-9]: " choice
+    read -p "Pilihan Anda [0-10]: " choice
 
     case $choice in
       1) show_status ;;
@@ -177,6 +185,7 @@ interactive_menu() {
       7) connect_terminal ;;
       8) view_logs ;;
       9) rebuild_app ;;
+      10) clean_uninstall ;;
       0) echo -e "${COLOR_GREEN}Terima kasih telah menggunakan Space LXD Dashboard! Bye 👋${COLOR_RESET}"; exit 0 ;;
       *) echo -e "${COLOR_RED}Pilihan tidak valid!${COLOR_RESET}"; sleep 1 ;;
     esac
@@ -193,5 +202,6 @@ case "$1" in
   shell) connect_terminal ;;
   logs) view_logs ;;
   rebuild) rebuild_app ;;
+  uninstall|purge) clean_uninstall ;;
   *) interactive_menu ;;
 esac
