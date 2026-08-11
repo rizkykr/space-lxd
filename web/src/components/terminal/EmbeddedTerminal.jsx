@@ -5,9 +5,10 @@ import 'xterm/css/xterm.css';
 
 export function EmbeddedTerminal({ target }) {
   const containerRef = useRef(null);
+  const targetName = target?.name;
 
   useEffect(() => {
-    if (!target || !containerRef.current) return;
+    if (!targetName || !containerRef.current) return;
 
     const term = new XTerminal({
       cursorBlink: true,
@@ -26,11 +27,11 @@ export function EmbeddedTerminal({ target }) {
     fitAddon.fit();
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(target.name)}`;
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(targetName)}`;
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
-      term.write(`\r\n\x1b[32m🚀 Connected to Space LXD PTY shell console for '${target.name}'...\x1b[0m\r\n\r\n`);
+      term.write(`\r\n\x1b[32m🚀 Connected to Space LXD PTY shell console for '${targetName}'...\x1b[0m\r\n\r\n`);
     };
 
     socket.onmessage = (event) => term.write(event.data);
@@ -50,7 +51,7 @@ export function EmbeddedTerminal({ target }) {
       if (socket) socket.close();
       term.dispose();
     };
-  }, [target]);
+  }, [targetName]);
 
   return <div ref={containerRef} className="w-full h-full p-2 bg-[#090d16]" />;
 }
