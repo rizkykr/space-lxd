@@ -34,6 +34,7 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = (newToken, newUser) => {
+    setSetupRequired(false);
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('lxd_token', newToken);
