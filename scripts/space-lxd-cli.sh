@@ -12,8 +12,14 @@ COLOR_RED="\033[1;31m"
 COLOR_BOLD="\033[1m"
 COLOR_MAGENTA="\033[1;35m"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null || pwd)"
+REAL_SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$REAL_SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$REAL_SOURCE")" && pwd)"
+  REAL_SOURCE="$(readlink "$REAL_SOURCE")"
+  [[ $REAL_SOURCE != /* ]] && REAL_SOURCE="$DIR/$REAL_SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$REAL_SOURCE")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
 PORT="${PORT:-9090}"
 
 banner() {
@@ -153,8 +159,14 @@ quick_create() {
 
 clean_uninstall() {
   banner
-  cd "$ROOT_DIR"
-  ./scripts/uninstall.sh
+  cd "$ROOT_DIR" 2>/dev/null || true
+  if [ -f "${ROOT_DIR}/scripts/uninstall.sh" ]; then
+    bash "${ROOT_DIR}/scripts/uninstall.sh"
+  elif [ -f "./scripts/uninstall.sh" ]; then
+    bash ./scripts/uninstall.sh
+  else
+    echo -e "${COLOR_RED}Skrip uninstall.sh tidak ditemukan di ${ROOT_DIR}.${COLOR_RESET}"
+  fi
   exit 0
 }
 
