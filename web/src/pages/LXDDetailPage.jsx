@@ -545,8 +545,8 @@ export function LXDDetailPage() {
         </div>
       )}
 
-      {/* Tab 4: Terminal Shell Console */}
-      {activeTab === 'terminal' && (
+      {/* Tab 4: Terminal Shell Console (Persisted in DOM for continuous PTY session) */}
+      <div className={activeTab === 'terminal' ? 'block' : 'hidden'}>
         <Card className="h-[550px] overflow-hidden flex flex-col border-border">
           <div className="bg-background px-4 py-3 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -557,7 +557,7 @@ export function LXDDetailPage() {
           </div>
           <EmbeddedTerminal target={{ name: lxdName, node_name: targetNode?.name || nodeId }} />
         </Card>
-      )}
+      </div>
 
       {/* Custom Shadcn Confirmation Modal */}
       <ConfirmDialog
