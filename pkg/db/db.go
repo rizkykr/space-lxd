@@ -177,7 +177,14 @@ func (db *DB) CreateAdminUser(username, password string) (*User, error) {
 	}
 	res, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", username, string(hash), "admin")
 	if err != nil {
-		return nil, err
+		// If username already exists in database, update password instead of returning UNIQUE constraint error
+		_, updateErr := db.Exec("UPDATE users SET password_hash = ?, role = 'admin' WHERE username = ?", string(hash), username)
+		if updateErr != nil {
+			return nil, err
+		}
+		var user User
+		_ = db.QueryRow("SELECT id, username, role, created_at FROM users WHERE username = ?", username).Scan(&user.ID, &user.Username, &user.Role, &user.CreatedAt)
+		return &user, nil
 	}
 	id, _ := res.LastInsertId()
 	_ = db.LogAuditAction("USER_SETUP", username, "Initial admin user created")
