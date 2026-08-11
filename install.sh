@@ -12,6 +12,8 @@ COLOR_YELLOW="\033[1;33m"
 COLOR_RED="\033[1;31m"
 COLOR_BOLD="\033[1m"
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+
 banner() {
   echo -e "${COLOR_CYAN}"
   echo "        🚀 SPACE LXD DASHBOARD INSTALLER"
@@ -95,13 +97,35 @@ install_golang_latest() {
   success "Go compiler (${GO_VER}) berhasil terpasang!"
 }
 
+ensure_repo() {
+  INSTALL_DIR="/opt/space-lxd"
+  if [ ! -f "${ROOT_DIR}/scripts/build.sh" ]; then
+    info "Skrip dijalankan via curl pipe. Mengklon repositori resmi ke ${INSTALL_DIR}..."
+    if ! command -v git >/dev/null 2>&1; then
+      if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update && sudo apt-get install -y git || true
+      elif command -v dnf >/dev/null 2>&1; then
+        sudo dnf install -y git || true
+      fi
+    fi
+    sudo mkdir -p "${INSTALL_DIR}"
+    sudo chown -R ${USER}:${USER} "${INSTALL_DIR}" 2>/dev/null || true
+    if [ -d "${INSTALL_DIR}/.git" ]; then
+      git -C "${INSTALL_DIR}" pull || true
+    else
+      git clone https://github.com/rizkykr/space-lxd.git "${INSTALL_DIR}"
+    fi
+    ROOT_DIR="${INSTALL_DIR}"
+    cd "${ROOT_DIR}"
+  fi
+}
+
 build_project() {
   info "Memeriksa biner dan aset Space LXD Dashboard..."
-  ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  cd "$ROOT_DIR"
+  ensure_repo
 
-  if [ -f "bin/lxd-manager-master" ] && [ -d "web/dist" ]; then
-    success "Aset pre-built terdeteksi siap pakai. Tidak memerlukan instalasi Go / Node.js manual!"
+  if [ -f "${ROOT_DIR}/bin/lxd-manager-master" ] && [ -d "${ROOT_DIR}/web/dist" ]; then
+    success "Aset pre-built terdeteksi di ${ROOT_DIR}."
     return
   fi
 
@@ -110,12 +134,16 @@ build_project() {
 
   info "Kompilasi dari source code..."
   export PATH=$PATH:/usr/local/go/bin
-  ./scripts/build.sh || error "Gagal membuat biner Space LXD."
+  chmod +x "${ROOT_DIR}/scripts/build.sh"
+  "${ROOT_DIR}/scripts/build.sh" || error "Gagal membuat biner Space LXD."
 }
 
 setup_systemd() {
   info "Mengkonfigurasi Systemd Service Units..."
-  ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  ROOT_DIR="${ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+  if [ ! -d "$ROOT_DIR" ] || [ ! -f "${ROOT_DIR}/scripts/build.sh" ]; then
+    ROOT_DIR="/opt/space-lxd"
+  fi
   PORT="${PORT:-9090}"
 
   cat <<EOF | sudo tee /etc/systemd/system/lxd-manager-master.service >/dev/null
