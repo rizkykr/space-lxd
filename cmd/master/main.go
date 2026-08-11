@@ -22,6 +22,7 @@ import (
 	"lxd-manager-dashboard/pkg/config"
 	"lxd-manager-dashboard/pkg/db"
 	"lxd-manager-dashboard/pkg/lxd"
+	"lxd-manager-dashboard/pkg/updater"
 	"lxd-manager-dashboard/pkg/ws"
 )
 
@@ -123,6 +124,8 @@ func main() {
 	mux.HandleFunc("/api/logs", srv.handleGetAuditLogs)
 	mux.HandleFunc("/api/ssh-keys", srv.handleSSHKeys)
 	mux.HandleFunc("/api/settings", srv.handleSettings)
+	mux.HandleFunc("/api/system/version", srv.handleSystemVersion)
+	mux.HandleFunc("/api/system/update", srv.handleSystemUpdate)
 
 	// WebSockets
 	mux.HandleFunc("/ws/agent", srv.handleWSAgent)
@@ -885,4 +888,55 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (s *Server) getRepoPath() string {
+	if path, err := os.Getwd(); err == nil && fileExists(filepath.Join(path, "scripts", "build.sh")) {
+		return path
+	}
+	if fileExists("/opt/space-lxd/scripts/build.sh") {
+		return "/opt/space-lxd"
+	}
+	path, _ := os.Getwd()
+	return path
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+func (s *Server) handleSystemVersion(w http.ResponseWriter, r *http.Request) {
+	info, err := updater.CheckForUpdates(s.getRepoPath())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(info)
+}
+
+func (s *Server) handleSystemUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "no-cache")
+
+	flusher, flusherOk := w.(http.Flusher)
+
+	logFn := func(msg string) {
+		_, _ = fmt.Fprintln(w, msg)
+		if flusherOk {
+			flusher.Flush()
+		}
+	}
+
+	err := updater.ApplyUpdate(s.getRepoPath(), logFn)
+	if err != nil {
+		logFn("❌ Update error: " + err.Error())
+	}
 }

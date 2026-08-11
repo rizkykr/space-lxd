@@ -170,6 +170,42 @@ clean_uninstall() {
   exit 0
 }
 
+check_and_update() {
+  banner
+  echo -e "${COLOR_BOLD}🔄 MEMERIKSA UPDATE DARI GITHUB (rizkykr/space-lxd)...${COLOR_RESET}"
+  echo "------------------------------------------------------"
+  cd "$ROOT_DIR" 2>/dev/null || true
+  git fetch --all >/dev/null 2>&1 || true
+
+  LOCAL_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  REMOTE_HASH=$(git rev-parse --short origin/main 2>/dev/null || echo "unknown")
+
+  echo -e "  📌 Versi Terpasang:  ${COLOR_CYAN}${LOCAL_HASH}${COLOR_RESET}"
+  echo -e "  🌐 Versi GitHub Main: ${COLOR_GREEN}${REMOTE_HASH}${COLOR_RESET}"
+  echo "------------------------------------------------------"
+
+  if [ "$LOCAL_HASH" != "unknown" ] && [ "$REMOTE_HASH" != "unknown" ] && [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
+    echo -e "${COLOR_YELLOW}🚀 HORE! Update terbaru Space LXD tersedia di GitHub!${COLOR_RESET}"
+    read -p "Apakah Anda ingin melakukan update otomatis sekarang? (Y/n): " confirm
+    confirm=${confirm:-"Y"}
+    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+      echo -e "${COLOR_CYAN}Mengunduh kode terbaru dari GitHub...${COLOR_RESET}"
+      git reset --hard origin/main
+      git pull origin main
+      echo -e "${COLOR_CYAN}Kompilasi biner dan aset React UI...${COLOR_RESET}"
+      ./scripts/build.sh
+      echo -e "${COLOR_GREEN}Merekonstruksi service Systemd...${COLOR_RESET}"
+      sudo systemctl restart lxd-manager-master 2>/dev/null || true
+      echo -e "${COLOR_GREEN}✅ UPDATE SELESAI! Space LXD Dashboard telah diperbarui.${COLOR_RESET}"
+    else
+      echo "Update dibatalkan."
+    fi
+  else
+    echo -e "${COLOR_GREEN}✅ Space LXD Dashboard sudah menggunakan versi terbaru (${LOCAL_HASH})!${COLOR_RESET}"
+  fi
+  read -p "Tekan Enter untuk kembali..."
+}
+
 interactive_menu() {
   while true; do
     banner
@@ -182,10 +218,11 @@ interactive_menu() {
     echo -e "  ${COLOR_BOLD}[7]${COLOR_RESET} 🖥️ Connect LXD Terminal Shell"
     echo -e "  ${COLOR_BOLD}[8]${COLOR_RESET} 📄 View Realtime Service Logs"
     echo -e "  ${COLOR_BOLD}[9]${COLOR_RESET} 🔨 Rebuild React UI & Go Binaries"
-    echo -e "  ${COLOR_BOLD}[10]${COLOR_RESET} 🗑️ Clean Uninstall & Purge All Data (Total Reset)"
+    echo -e "  ${COLOR_BOLD}[10]${COLOR_RESET} 🔄 Check & Update Space LXD from GitHub"
+    echo -e "  ${COLOR_BOLD}[11]${COLOR_RESET} 🗑️ Clean Uninstall & Purge All Data (Total Reset)"
     echo -e "  ${COLOR_BOLD}[0]${COLOR_RESET} 🚪 Exit CLI Menu"
     echo "======================================================"
-    read -p "Pilihan Anda [0-10]: " choice
+    read -p "Pilihan Anda [0-11]: " choice
 
     case $choice in
       1) show_status ;;
@@ -197,7 +234,8 @@ interactive_menu() {
       7) connect_terminal ;;
       8) view_logs ;;
       9) rebuild_app ;;
-      10) clean_uninstall ;;
+      10) check_and_update ;;
+      11) clean_uninstall ;;
       0) echo -e "${COLOR_GREEN}Terima kasih telah menggunakan Space LXD Dashboard! Bye 👋${COLOR_RESET}"; exit 0 ;;
       *) echo -e "${COLOR_RED}Pilihan tidak valid!${COLOR_RESET}"; sleep 1 ;;
     esac
@@ -214,6 +252,7 @@ case "$1" in
   shell) connect_terminal ;;
   logs) view_logs ;;
   rebuild) rebuild_app ;;
+  update) check_and_update ;;
   uninstall|purge) clean_uninstall ;;
   *) interactive_menu ;;
 esac
