@@ -60,22 +60,26 @@ check_lxd() {
 }
 
 build_project() {
-  info "Memeriksa dan membuat biner Space LXD Dashboard..."
+  info "Memeriksa biner dan aset Space LXD Dashboard..."
   ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   cd "$ROOT_DIR"
 
-  if [ -d "web" ] && command -v npm >/dev/null 2>&1; then
-    info "Building React Frontend UI..."
-    (cd web && npm install && npm run build)
+  if [ -f "bin/lxd-manager-master" ] && [ -d "web/dist" ]; then
+    success "Aset pre-built terdeteksi siap pakai. Tidak memerlukan instalasi Go / Node.js manual!"
+    return
   fi
 
-  if command -v go >/dev/null 2>&1; then
-    info "Building Master & Agent Go Binaries..."
+  if command -v go >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+    info "Kompilasi ulang dari source code (Go & Node.js terdeteksi)..."
     ./scripts/build.sh
   elif [ -f "bin/lxd-manager-master" ]; then
-    success "Pre-built binary found at bin/lxd-manager-master."
+    success "Biner pre-built terdeteksi di bin/lxd-manager-master."
   else
-    error "Go compiler tidak ditemukan! Harap install Go (golang) atau jalankan './scripts/build.sh'."
+    warn "Go / Node.js tidak ditemukan, menginstall dependensi kompilasi dasar..."
+    if command -v apt-get >/dev/null 2>&1; then
+      sudo apt-get update && sudo apt-get install -y golang nodejs npm || true
+    fi
+    ./scripts/build.sh || error "Gagal membuat biner. Harap install Go (golang) dan Node.js."
   fi
 }
 

@@ -35,25 +35,25 @@ Jalankan perintah berikut di server Linux Anda (Ubuntu / Debian / AlmaLinux / Fe
 curl -fsSL https://raw.githubusercontent.com/rizkykr/space-lxd/main/install.sh | bash
 ```
 
-Script di atas akan secara otomatis:
-1. Memeriksa & menginstall LXD daemon (`sudo snap install lxd`).
-2. Menyiapkan biner `lxd-manager-master` & `lxd-manager-agent`.
+Script di atas akan secara **otomatis 100% (Zero Prerequisite Manual)**:
+1. Memeriksa & menginstall LXD daemon via Snap jika belum ada (`sudo snap install lxd && sudo lxd init --auto`).
+2. Menyiapkan biner & aset UI (tidak memerlukan instalasi Go / Node.js manual).
 3. Mengonfigurasi dan mengaktifkan **Systemd Service** `lxd-manager-master`.
+4. Memasang perintah CLI Interaktif **`space-lxd`** di terminal `/usr/local/bin/space-lxd`.
 
 Setelah instalasi selesai, buka Dashboard di browser:
 👉 **`http://<SERVER_IP>:9090`**
 
 ---
 
-## 🛠️ Instalasi & Build Manual
+## 🛠️ Pengembangan & Build Manual dari Source Code
 
-Jika Anda ingin mengompilasi dari source code:
+*Catatan: Langkah di bawah ini HANYA dibutuhkan jika Anda ingin memodifikasi atau mengompilasi ulang source code secara manual.*
 
-### Prasyarat
+### Prasyarat Kompilasi Manual:
 - **Linux OS** (Ubuntu 22.04 / 24.04 disarankan)
-- **LXD Daemon** terinstall & aktif (`sudo snap install lxd && sudo lxd init --auto`)
-- **Go 1.22+**
-- **Node.js 20+** & **npm**
+- **LXD Daemon** (`sudo snap install lxd && sudo lxd init --auto`)
+- **Go 1.22+** & **Node.js 20+ / npm** (hanya untuk build manual)
 
 ### Langkah Kompilasi & Jalankan:
 
