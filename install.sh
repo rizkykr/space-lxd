@@ -99,30 +99,34 @@ install_golang_latest() {
 
 ensure_repo() {
   INSTALL_DIR="/opt/space-lxd"
-  if [ ! -f "${ROOT_DIR}/scripts/build.sh" ]; then
-    info "Skrip dijalankan via curl pipe. Mengklon repositori resmi ke ${INSTALL_DIR}..."
-    if ! command -v git >/dev/null 2>&1; then
-      if command -v apt-get >/dev/null 2>&1; then
-        sudo apt-get update && sudo apt-get install -y git || true
-      elif command -v dnf >/dev/null 2>&1; then
-        sudo dnf install -y git || true
-      fi
-    fi
-    sudo mkdir -p "${INSTALL_DIR}"
-    sudo chown -R ${USER}:${USER} "${INSTALL_DIR}" 2>/dev/null || true
-    if [ -d "${INSTALL_DIR}/.git" ]; then
-      git -C "${INSTALL_DIR}" pull || true
-    else
-      git clone https://github.com/rizkykr/space-lxd.git "${INSTALL_DIR}"
-    fi
-    ROOT_DIR="${INSTALL_DIR}"
-    cd "${ROOT_DIR}"
+  if [ -f "./scripts/build.sh" ]; then
+    ROOT_DIR="$(pwd)"
+    return
   fi
+
+  info "Skrip dijalankan via curl pipe. Mengklon repositori resmi ke ${INSTALL_DIR}..."
+  if ! command -v git >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      sudo apt-get update && sudo apt-get install -y git || true
+    elif command -v dnf >/dev/null 2>&1; then
+      sudo dnf install -y git || true
+    fi
+  fi
+  sudo mkdir -p "${INSTALL_DIR}"
+  sudo chown -R ${USER}:${USER} "${INSTALL_DIR}" 2>/dev/null || true
+  if [ -d "${INSTALL_DIR}/.git" ]; then
+    git -C "${INSTALL_DIR}" pull || true
+  else
+    git clone https://github.com/rizkykr/space-lxd.git "${INSTALL_DIR}"
+  fi
+  ROOT_DIR="${INSTALL_DIR}"
+  cd "${ROOT_DIR}"
 }
 
 build_project() {
   info "Memeriksa biner dan aset Space LXD Dashboard..."
   ensure_repo
+  cd "${ROOT_DIR}"
 
   if [ -f "${ROOT_DIR}/bin/lxd-manager-master" ] && [ -d "${ROOT_DIR}/web/dist" ]; then
     success "Aset pre-built terdeteksi di ${ROOT_DIR}."
@@ -133,6 +137,7 @@ build_project() {
   install_golang_latest
 
   info "Kompilasi dari source code..."
+  cd "${ROOT_DIR}"
   export PATH=$PATH:/usr/local/go/bin
   chmod +x "${ROOT_DIR}/scripts/build.sh"
   "${ROOT_DIR}/scripts/build.sh" || error "Gagal membuat biner Space LXD."
