@@ -29,16 +29,28 @@ get_all_nodes() {
 # ── Uninstall agent di node worker via SSH ─────────────────────────────────────
 remote_uninstall_node() {
   local NODE_IP="$1"
-  local SSH_KEY="${2:-${HOME}/.ssh/id_ed25519}"
+  local REQ_KEY="$2"
 
   info "Menghapus agent di node ${NODE_IP}..."
 
   SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=8 -o BatchMode=yes"
 
-  # Coba SSH sebagai space-lxd, fallback ke root
-  for SSH_USER in space-lxd root; do
-    if ssh $SSH_OPTS -i "${SSH_KEY}" "${SSH_USER}@${NODE_IP}" \
-        "echo connected" &>/dev/null 2>&1; then
+  POSSIBLE_KEYS=(
+    "$REQ_KEY"
+    "/home/space-lxd/.ssh/id_ed25519"
+    "/var/lib/space-lxd/.ssh/id_ed25519"
+    "${HOME}/.ssh/id_ed25519"
+    "${HOME}/.ssh/id_rsa"
+    "/root/.ssh/id_ed25519"
+    "/root/.ssh/id_rsa"
+  )
+
+  for SSH_KEY in "${POSSIBLE_KEYS[@]}"; do
+    [ -z "$SSH_KEY" ] && continue
+    [ ! -f "$SSH_KEY" ] && continue
+
+    for SSH_USER in space-lxd root; do
+      if ssh $SSH_OPTS -i "${SSH_KEY}" "${SSH_USER}@${NODE_IP}" "echo connected" &>/dev/null 2>&1; then
 
       ssh $SSH_OPTS -i "${SSH_KEY}" "${SSH_USER}@${NODE_IP}" bash <<'REMOTE_SCRIPT'
 set -e
@@ -62,6 +74,7 @@ REMOTE_SCRIPT
       success "Node ${NODE_IP} berhasil diuninstall."
       return 0
     fi
+  done
   done
 
   warn "Tidak bisa SSH ke ${NODE_IP}. Lewati node ini (uninstall manual diperlukan)."
@@ -217,13 +230,22 @@ main() {
       done
       echo ""
 
-      # Pilih SSH key
-      DEFAULT_KEY="/var/lib/space-lxd/.ssh/id_ed25519"
-      if [ ! -f "$DEFAULT_KEY" ]; then
-        DEFAULT_KEY="${HOME}/.ssh/id_ed25519"
-      fi
-      read -rp "SSH Key untuk akses node [${DEFAULT_KEY}]: " SSH_KEY_INPUT
-      SSH_KEY="${SSH_KEY_INPUT:-$DEFAULT_KEY}"
+      # Auto-detect SSH Key (smart resolution)
+      SSH_KEY=""
+      POSSIBLE_KEYS=(
+        "/home/space-lxd/.ssh/id_ed25519"
+        "/var/lib/space-lxd/.ssh/id_ed25519"
+        "${HOME}/.ssh/id_ed25519"
+        "${HOME}/.ssh/id_rsa"
+        "/root/.ssh/id_ed25519"
+        "/root/.ssh/id_rsa"
+      )
+      for k in "${POSSIBLE_KEYS[@]}"; do
+        if [ -f "$k" ]; then
+          SSH_KEY="$k"
+          break
+        fi
+      done
 
       read -rp "Hapus juga semua LXD Container di semua node? (y/N): " PURGE_LXDS
       echo ""
