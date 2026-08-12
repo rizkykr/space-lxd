@@ -13,7 +13,7 @@ MASTER_URL=""
 TOKEN=""
 NODE_NAME="$(hostname)"
 SPACE_USER="space-lxd"
-SPACE_HOME="/var/lib/space-lxd"
+SPACE_HOME="/home/space-lxd"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

@@ -122,6 +122,7 @@ local_uninstall() {
 
   info "[4/5] Menghapus service user 'space-lxd'..."
   userdel -r space-lxd 2>/dev/null || true
+  rm -rf /home/space-lxd 2>/dev/null || true
   rm -rf /var/lib/space-lxd 2>/dev/null || true
   success "Service user 'space-lxd' dihapus."
 

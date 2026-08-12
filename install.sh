@@ -15,7 +15,7 @@ COLOR_BOLD="\033[1m"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 
 SPACE_USER="space-lxd"
-SPACE_HOME="/var/lib/space-lxd"
+SPACE_HOME="/home/space-lxd"
 
 banner() {
   echo -e "${COLOR_CYAN}"
