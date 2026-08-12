@@ -128,6 +128,24 @@ func (h *Hub) GetAgent(nodeID string) (*AgentConnection, bool) {
 	return val.(*AgentConnection), true
 }
 
+func (h *Hub) ClusterBroadcastUpdate() {
+	h.Agents.Range(func(key, value interface{}) bool {
+		agent := value.(*AgentConnection)
+		reqID := fmt.Sprintf("req_update_%d", time.Now().UnixNano())
+		msg := WSMessage{
+			Type:   MsgRPCReq,
+			NodeID: agent.NodeID,
+			ReqID:  reqID,
+			Action: "self_update",
+		}
+		agent.mu.Lock()
+		_ = agent.Conn.WriteJSON(msg)
+		agent.mu.Unlock()
+		log.Printf("📢 Broadcasted cluster update signal to Worker Node '%s'", agent.NodeID)
+		return true
+	})
+}
+
 func (h *Hub) SendRPC(nodeID string, action string, payload RPCReqPayload, timeout time.Duration) (*WSMessage, error) {
 	agent, ok := h.GetAgent(nodeID)
 	if !ok {

@@ -359,6 +359,12 @@ func handleMasterMessage(conn *websocket.Conn, wsMu *sync.Mutex, lxdClient *lxd.
 				instType = "container"
 			}
 			err = lxdClient.LaunchInstance(req.Name, img, instType, ramGB, cpuCores, req.DiskGB, req.Autostart, req.SSHKey, req.TemplatePreset)
+		case "self_update":
+			log.Printf("🚀 [Agent Self-Update] Received cluster update command from Master! Executing space-lxd update...")
+			go func() {
+				time.Sleep(1 * time.Second)
+				_ = exec.Command("sudo", "space-lxd", "update").Run()
+			}()
 		default:
 			err = fmt.Errorf("unknown action '%s'", msg.Action)
 		}

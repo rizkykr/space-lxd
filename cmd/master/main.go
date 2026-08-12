@@ -1285,5 +1285,8 @@ func (s *Server) handleSystemUpdate(w http.ResponseWriter, r *http.Request) {
 	err := updater.ApplyUpdate(s.getRepoPath(), logFn)
 	if err != nil {
 		logFn("❌ Update error: " + err.Error())
+	} else {
+		logFn("📢 Menyiarkan (broadcasting) instruksi update otomatis ke seluruh Worker Node Joiner di kluster...")
+		s.hub.ClusterBroadcastUpdate()
 	}
 }
