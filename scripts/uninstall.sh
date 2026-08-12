@@ -77,6 +77,33 @@ REMOTE_SCRIPT
   done
   done
 
+  # Fallback try standard SSH agent / default identities
+  for SSH_USER in space-lxd root; do
+    if ssh $SSH_OPTS "${SSH_USER}@${NODE_IP}" "echo connected" &>/dev/null 2>&1; then
+      ssh $SSH_OPTS "${SSH_USER}@${NODE_IP}" bash <<'REMOTE_SCRIPT'
+set -e
+echo "  → Stopping agent service..."
+systemctl stop lxd-manager-agent 2>/dev/null || true
+systemctl disable lxd-manager-agent 2>/dev/null || true
+rm -f /etc/systemd/system/lxd-manager-agent.service
+systemctl daemon-reload
+
+echo "  → Removing agent binary..."
+rm -f /usr/local/bin/lxd-manager-agent
+
+echo "  → Removing agent config..."
+rm -rf /etc/lxd-manager
+
+echo "  → Removing service user space-lxd..."
+userdel -r space-lxd 2>/dev/null || true
+
+echo "  ✅ Node agent uninstall selesai."
+REMOTE_SCRIPT
+      success "Node ${NODE_IP} berhasil diuninstall."
+      return 0
+    fi
+  done
+
   warn "Tidak bisa SSH ke ${NODE_IP}. Lewati node ini (uninstall manual diperlukan)."
   return 1
 }
@@ -84,13 +111,41 @@ REMOTE_SCRIPT
 # ── Hapus semua LXD container di node worker via SSH ──────────────────────────
 remote_purge_lxds() {
   local NODE_IP="$1"
-  local SSH_KEY="${2:-${HOME}/.ssh/id_ed25519}"
+  local REQ_KEY="$2"
 
   SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=8 -o BatchMode=yes"
+  POSSIBLE_KEYS=(
+    "$REQ_KEY"
+    "/home/space-lxd/.ssh/id_ed25519"
+    "/var/lib/space-lxd/.ssh/id_ed25519"
+    "${HOME}/.ssh/id_ed25519"
+    "${HOME}/.ssh/id_rsa"
+    "/root/.ssh/id_ed25519"
+    "/root/.ssh/id_rsa"
+  )
+
+  for SSH_KEY in "${POSSIBLE_KEYS[@]}"; do
+    [ -z "$SSH_KEY" ] && continue
+    [ ! -f "$SSH_KEY" ] && continue
+
+    for SSH_USER in space-lxd root; do
+      if ssh $SSH_OPTS -i "${SSH_KEY}" "${SSH_USER}@${NODE_IP}" "echo connected" &>/dev/null 2>&1; then
+        ssh $SSH_OPTS -i "${SSH_KEY}" "${SSH_USER}@${NODE_IP}" bash <<'REMOTE_SCRIPT'
+if command -v lxc &>/dev/null; then
+  for c in $(lxc list -c n --format csv 2>/dev/null); do
+    [ -n "$c" ] && lxc delete "$c" --force 2>/dev/null && echo "  → Deleted LXD: $c" || true
+  done
+fi
+REMOTE_SCRIPT
+        return 0
+      fi
+    done
+  done
+
+  # Fallback try standard SSH agent / default identities
   for SSH_USER in space-lxd root; do
-    if ssh $SSH_OPTS -i "${SSH_KEY}" "${SSH_USER}@${NODE_IP}" \
-        "echo connected" &>/dev/null 2>&1; then
-      ssh $SSH_OPTS -i "${SSH_KEY}" "${SSH_USER}@${NODE_IP}" bash <<'REMOTE_SCRIPT'
+    if ssh $SSH_OPTS "${SSH_USER}@${NODE_IP}" "echo connected" &>/dev/null 2>&1; then
+      ssh $SSH_OPTS "${SSH_USER}@${NODE_IP}" bash <<'REMOTE_SCRIPT'
 if command -v lxc &>/dev/null; then
   for c in $(lxc list -c n --format csv 2>/dev/null); do
     [ -n "$c" ] && lxc delete "$c" --force 2>/dev/null && echo "  → Deleted LXD: $c" || true
@@ -100,6 +155,7 @@ REMOTE_SCRIPT
       return 0
     fi
   done
+
   warn "Tidak bisa SSH ke ${NODE_IP} untuk hapus LXDs."
 }
 
