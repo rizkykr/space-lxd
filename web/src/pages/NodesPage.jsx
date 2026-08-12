@@ -100,7 +100,9 @@ export function NodesPage() {
                           <Edit2 className="size-3" />
                         </Button>
                       </div>
-                      <p className="text-xs font-mono text-muted-foreground mt-1">IP: {node.ip || '127.0.0.1'}</p>
+                      <p className="text-xs font-mono text-muted-foreground mt-1">
+                        IP: {node.custom_ip_domain ? <span className="text-emerald-400 font-bold" title="Custom Domain / IP Active">{node.custom_ip_domain} ({node.ip})</span> : (node.ip || '127.0.0.1')}
+                      </p>
                     </div>
                   )}
                 </div>

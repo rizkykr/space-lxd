@@ -13,6 +13,7 @@ type Node struct {
 	ID              string    `json:"id"`
 	Name            string    `json:"name"`
 	IP              string    `json:"ip"`
+	CustomIPDomain  string    `json:"custom_ip_domain"`
 	Status          string    `json:"status"` // "online", "offline", "syncing"
 	OSName          string    `json:"os_name"`
 	Kernel          string    `json:"kernel"`
@@ -99,6 +100,7 @@ func (db *DB) createTables() error {
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
 		ip TEXT DEFAULT '',
+		custom_ip_domain TEXT DEFAULT '',
 		status TEXT DEFAULT 'offline',
 		os_name TEXT DEFAULT '',
 		kernel TEXT DEFAULT '',
@@ -287,13 +289,23 @@ func (db *DB) UpdateNodeName(nodeID string, newName string) error {
 	return err
 }
 
+func (db *DB) UpdateNodeIPDomain(nodeID string, customIPDomain string) error {
+	_, err := db.Exec("UPDATE nodes SET custom_ip_domain = ? WHERE id = ?", customIPDomain, customIPDomain)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("UPDATE nodes SET custom_ip_domain = ? WHERE id = ?", customIPDomain, nodeID)
+	return err
+}
+
 func (db *DB) UpsertNode(node Node) error {
 	query := `
-	INSERT INTO nodes (id, name, ip, status, os_name, kernel, uptime, load_avg, cpu_cores, cpu_usage_pct, ram_total_mb, ram_used_mb, storage_total_gb, storage_used_gb, storage_usage_pct, secret_token, is_master, last_seen, created_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	INSERT INTO nodes (id, name, ip, custom_ip_domain, status, os_name, kernel, uptime, load_avg, cpu_cores, cpu_usage_pct, ram_total_mb, ram_used_mb, storage_total_gb, storage_used_gb, storage_usage_pct, secret_token, is_master, last_seen, created_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	ON CONFLICT(id) DO UPDATE SET
 		name=CASE WHEN nodes.name != '' AND nodes.name != nodes.id THEN nodes.name ELSE excluded.name END,
 		ip=excluded.ip,
+		custom_ip_domain=CASE WHEN nodes.custom_ip_domain != '' THEN nodes.custom_ip_domain ELSE excluded.custom_ip_domain END,
 		status=excluded.status,
 		os_name=excluded.os_name,
 		kernel=excluded.kernel,
@@ -309,12 +321,12 @@ func (db *DB) UpsertNode(node Node) error {
 		secret_token=excluded.secret_token,
 		last_seen=CURRENT_TIMESTAMP;
 	`
-	_, err := db.Exec(query, node.ID, node.Name, node.IP, node.Status, node.OSName, node.Kernel, node.Uptime, node.LoadAvg, node.CPUCores, node.CPUUsagePct, node.RAMTotalMB, node.RAMUsedMB, node.StorageTotalGB, node.StorageUsedGB, node.StorageUsagePct, node.SecretToken, node.IsMaster)
+	_, err := db.Exec(query, node.ID, node.Name, node.IP, node.CustomIPDomain, node.Status, node.OSName, node.Kernel, node.Uptime, node.LoadAvg, node.CPUCores, node.CPUUsagePct, node.RAMTotalMB, node.RAMUsedMB, node.StorageTotalGB, node.StorageUsedGB, node.StorageUsagePct, node.SecretToken, node.IsMaster)
 	return err
 }
 
 func (db *DB) GetAllNodes() ([]Node, error) {
-	rows, err := db.Query("SELECT id, name, ip, status, os_name, kernel, uptime, load_avg, cpu_cores, cpu_usage_pct, ram_total_mb, ram_used_mb, storage_total_gb, storage_used_gb, storage_usage_pct, is_master, last_seen, created_at FROM nodes ORDER BY is_master DESC, name ASC")
+	rows, err := db.Query("SELECT id, name, ip, custom_ip_domain, status, os_name, kernel, uptime, load_avg, cpu_cores, cpu_usage_pct, ram_total_mb, ram_used_mb, storage_total_gb, storage_used_gb, storage_usage_pct, is_master, last_seen, created_at FROM nodes ORDER BY is_master DESC, name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +335,7 @@ func (db *DB) GetAllNodes() ([]Node, error) {
 	var nodes []Node
 	for rows.Next() {
 		var n Node
-		if err := rows.Scan(&n.ID, &n.Name, &n.IP, &n.Status, &n.OSName, &n.Kernel, &n.Uptime, &n.LoadAvg, &n.CPUCores, &n.CPUUsagePct, &n.RAMTotalMB, &n.RAMUsedMB, &n.StorageTotalGB, &n.StorageUsedGB, &n.StorageUsagePct, &n.IsMaster, &n.LastSeen, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.Name, &n.IP, &n.CustomIPDomain, &n.Status, &n.OSName, &n.Kernel, &n.Uptime, &n.LoadAvg, &n.CPUCores, &n.CPUUsagePct, &n.RAMTotalMB, &n.RAMUsedMB, &n.StorageTotalGB, &n.StorageUsedGB, &n.StorageUsagePct, &n.IsMaster, &n.LastSeen, &n.CreatedAt); err != nil {
 			return nil, err
 		}
 		nodes = append(nodes, n)

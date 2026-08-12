@@ -420,9 +420,10 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 	nodeID := parts[2]
 
 	var req struct {
-		Action         string `json:"action"` // start, stop, delete, launch, rename_node, etc.
+		Action         string `json:"action"` // start, stop, delete, launch, rename_node, update_node_domain, etc.
 		Name           string `json:"name"`
 		NewName        string `json:"new_name"`
+		CustomIPDomain string `json:"custom_ip_domain"`
 		Image          string `json:"image"`
 		Type           string `json:"type"`
 		RAMGB          int    `json:"ram_gb"`
@@ -455,6 +456,17 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Nama node berhasil diperbarui"})
+		return
+	}
+
+	if req.Action == "update_node_domain" {
+		customDomain := strings.TrimSpace(req.CustomIPDomain)
+		if err := s.db.UpdateNodeIPDomain(nodeID, customDomain); err != nil {
+			http.Error(w, "Gagal mengubah IP/Domain node: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Domain/IP Custom node berhasil diperbarui"})
 		return
 	}
 	if req.Action == "delete_node" {
@@ -815,6 +827,9 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 			if n.ID == nodeID && !n.IsMaster {
 				isWorker = true
 				workerIP = n.IP
+				if strings.TrimSpace(n.CustomIPDomain) != "" {
+					workerIP = strings.TrimSpace(n.CustomIPDomain)
+				}
 				break
 			}
 		}

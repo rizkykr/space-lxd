@@ -122,6 +122,33 @@ export function NodeLXDsPage() {
     });
   };
 
+  // Custom Domain / IP State
+  const [isEditingDomain, setIsEditingDomain] = useState(false);
+  const [customDomainInput, setCustomDomainInput] = useState('');
+  const [domainLoading, setDomainLoading] = useState(false);
+
+  const handleUpdateDomain = async () => {
+    setDomainLoading(true);
+    try {
+      const res = await fetch(`/api/nodes/${nodeId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_node_domain', custom_ip_domain: customDomainInput.trim() })
+      });
+      if (res.ok) {
+        addToast('success', `Domain/IP Custom node berhasil diperbarui`);
+        setIsEditingDomain(false);
+        fetchNodes();
+      } else {
+        addToast('error', await res.text());
+      }
+    } catch (e) {
+      addToast('error', "Error: " + e.message);
+    } finally {
+      setDomainLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header & Breadcrumb */}
@@ -182,10 +209,42 @@ export function NodeLXDsPage() {
       </div>
 
       {/* Node Health Quick Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 font-mono text-xs">
         <Card className="p-4 space-y-1">
-          <p className="text-[11px] text-muted-foreground uppercase">IP Address</p>
+          <p className="text-[11px] text-muted-foreground uppercase">Internal Host IP</p>
           <p className="text-base font-bold text-foreground">{targetNode?.ip || '127.0.0.1'}</p>
+        </Card>
+        <Card className="p-4 space-y-1">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-muted-foreground uppercase">Custom Domain / IP Endpoint</p>
+            {!isEditingDomain && (
+              <Button variant="ghost" size="icon" className="size-5 text-muted-foreground hover:text-primary" title="Atur Domain/IP Kustom" onClick={() => { setCustomDomainInput(targetNode?.custom_ip_domain || ''); setIsEditingDomain(true); }}>
+                <Edit2 className="size-3" />
+              </Button>
+            )}
+          </div>
+          {isEditingDomain ? (
+            <div className="flex items-center gap-1 mt-1">
+              <Input
+                type="text"
+                value={customDomainInput}
+                onChange={(e) => setCustomDomainInput(e.target.value)}
+                placeholder="node1.domain.com atau IP..."
+                className="h-7 text-xs font-mono"
+                autoFocus
+              />
+              <Button size="icon" className="size-7" onClick={handleUpdateDomain} disabled={domainLoading}>
+                {domainLoading ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+              </Button>
+              <Button variant="ghost" size="icon" className="size-7" onClick={() => setIsEditingDomain(false)} disabled={domainLoading}>
+                <X className="size-3" />
+              </Button>
+            </div>
+          ) : (
+            <p className="text-base font-bold text-emerald-400 truncate" title={targetNode?.custom_ip_domain || 'Belum diatur'}>
+              {targetNode?.custom_ip_domain || '— (Gunakan Internal)'}
+            </p>
+          )}
         </Card>
         <Card className="p-4 space-y-1">
           <p className="text-[11px] text-muted-foreground uppercase">RAM Usage</p>
