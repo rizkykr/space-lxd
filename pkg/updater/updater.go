@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -105,24 +104,30 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 
 	logFn(fmt.Sprintf("📦 Pulling update terbaru dari GitHub 'rizkykr/space-lxd' di %s...", repoPath))
 
-	// Ensure service user has full write permissions to .git directory
-	_ = exec.Command("sudo", "chown", "-R", "space-lxd:space-lxd", filepath.Join(repoPath, ".git")).Run()
+	// Fix full directory permissions on /opt/space-lxd for service user space-lxd
+	_ = exec.Command("sudo", "chown", "-R", "space-lxd:space-lxd", repoPath).Run()
+	_ = exec.Command("sudo", "chmod", "-R", "u+rwX,g+rwX", repoPath).Run()
 
 	fetchCmd := exec.Command("git", "fetch", "--all")
 	fetchCmd.Dir = repoPath
 	fetchCmd.Env = env
-	if out, err := fetchCmd.CombinedOutput(); err != nil {
-		// Fallback try with sudo if normal fetch encounters permission issue
-		logFn(fmt.Sprintf("⚠️ Warning git fetch: %s", string(out)))
-		_ = exec.Command("sudo", "git", "-C", repoPath, "fetch", "--all").Run()
+	if _, err := fetchCmd.CombinedOutput(); err != nil {
+		// Fallback silently using sudo git fetch
+		sudoFetch := exec.Command("sudo", "git", "-C", repoPath, "fetch", "--all")
+		sudoFetch.Env = env
+		_ = sudoFetch.Run()
 	}
 
 	resetCmd := exec.Command("git", "reset", "--hard", "origin/main")
 	resetCmd.Dir = repoPath
 	resetCmd.Env = env
-	if out, err := resetCmd.CombinedOutput(); err != nil {
-		logFn(fmt.Sprintf("❌ Error git reset: %s", string(out)))
-		return fmt.Errorf("git reset failed: %v", err)
+	if _, err := resetCmd.CombinedOutput(); err != nil {
+		sudoReset := exec.Command("sudo", "git", "-C", repoPath, "reset", "--hard", "origin/main")
+		sudoReset.Env = env
+		if out, err := sudoReset.CombinedOutput(); err != nil {
+			logFn(fmt.Sprintf("❌ Error git reset: %s", string(out)))
+			return fmt.Errorf("git reset failed: %v", err)
+		}
 	}
 	logFn("✅ Source code berhasil diperbarui ke commit terbaru!")
 
