@@ -88,6 +88,40 @@ export function NodeLXDsPage() {
     });
   };
 
+  const handleDeleteNode = async () => {
+    setLoadingAction('delete_node');
+    try {
+      const res = await fetch(`/api/nodes/${nodeId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_node' })
+      });
+      if (res.ok) {
+        addToast('success', `Node Server '${targetNode?.name || nodeId}' dan seluruh LXD container di dalamnya berhasil dihapus`);
+        fetchNodes();
+        navigate('/nodes');
+      } else {
+        addToast('error', await res.text());
+      }
+    } catch (e) {
+      addToast('error', "Error: " + e.message);
+    } finally {
+      setLoadingAction('');
+      setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null });
+    }
+  };
+
+  const promptDeleteNode = () => {
+    const nameMatch = targetNode?.name || nodeId;
+    setConfirmModal({
+      isOpen: true,
+      title: `⚠️ Hapus Node Server '${nameMatch}'`,
+      message: `PERINGATAN: Apakah Anda yakin ingin menghapus Node Server '${nameMatch}' dari kluster? SELURUH container LXD (${nodeLXDs.length} container) yang ada di dalam Node ini akan dihapus secara permanen!`,
+      requireMatchText: nameMatch,
+      onConfirm: handleDeleteNode
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header & Breadcrumb */}
@@ -135,6 +169,10 @@ export function NodeLXDsPage() {
           <Button variant="outline" onClick={() => setActiveTab('terminal')}>
             <Server className="size-4" data-icon="inline-start" />
             <span>Host Terminal</span>
+          </Button>
+          <Button variant="destructive" onClick={promptDeleteNode} title="Hapus Node Server ini beserta seluruh LXD Container didalamnya">
+            <Trash2 className="size-4" data-icon="inline-start" />
+            <span>Hapus Node</span>
           </Button>
           <Button onClick={onOpenCreateLXD}>
             <Plus className="size-4" data-icon="inline-start" />

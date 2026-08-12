@@ -273,6 +273,11 @@ func (db *DB) DeleteSSHKey(id int64) error {
 	return err
 }
 
+func (db *DB) DeleteNode(nodeID string) error {
+	_, err := db.Exec("DELETE FROM nodes WHERE id = ?", nodeID)
+	return err
+}
+
 func (db *DB) UpdateNodeName(nodeID string, newName string) error {
 	_, err := db.Exec("UPDATE nodes SET name = ? WHERE id = ?", newName, newName)
 	if err != nil {

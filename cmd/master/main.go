@@ -457,6 +457,34 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Nama node berhasil diperbarui"})
 		return
 	}
+	if req.Action == "delete_node" {
+		log.Printf("🗑️ Request deleting Node '%s' and purging all its LXD containers...", nodeID)
+		
+		// 1. Purge all LXD containers on the node
+		if agent, ok := s.hub.GetAgent(nodeID); ok {
+			for _, inst := range agent.Instances {
+				log.Printf("Deleting LXD '%s' on node '%s' before purging node...", inst.Name, nodeID)
+				_, _ = s.hub.SendRPC(nodeID, "delete", ws.RPCReqPayload{Name: inst.Name}, 15*time.Second)
+			}
+		} else if nodeID == "local-master" {
+			lxdClient := lxd.NewClient(s.cfg.LXDSocket)
+			if insts, err := lxdClient.ListInstances(); err == nil {
+				for _, inst := range insts {
+					_ = lxdClient.DeleteInstance(inst.Name)
+				}
+			}
+		}
+
+		// 2. Remove Node entry from DB
+		if err := s.db.DeleteNode(nodeID); err != nil {
+			http.Error(w, "Gagal menghapus node dari database: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Node dan seluruh LXD container di dalamnya berhasil dihapus"})
+		return
+	}
 
 	if nodeID == "local-master" {
 		lxdClient := lxd.NewClient(s.cfg.LXDSocket)
