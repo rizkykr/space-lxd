@@ -55,7 +55,8 @@ if ! command -v lxc &>/dev/null; then
     exit 1
   fi
 else
-  echo "${GRN}✓ LXD Daemon terdeteksi (${$(lxc --version 2>/dev/null || echo "ok")}).${R}"
+  LXC_VER=$(lxc --version 2>/dev/null || echo "ok")
+  echo "${GRN}✓ LXD Daemon terdeteksi (${LXC_VER}).${R}"
 fi
 
 NODE_ID="node_$(cat /etc/machine-id 2>/dev/null || date +%s | cut -c1-10)"
