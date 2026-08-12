@@ -605,8 +605,41 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 	}
 	rpcTimeout := 30 * time.Second
 	if req.Action == "launch" {
-		rpcTimeout = 3 * time.Minute
+		rpcTimeout = 5 * time.Minute
 	}
+
+	if req.Action == "launch" && r.URL.Query().Get("stream") == "true" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cache-Control", "no-cache")
+		flusher, ok := w.(http.Flusher)
+
+		logFn := func(msg string) {
+			fmt.Fprintf(w, "%s\n", msg)
+			if ok {
+				flusher.Flush()
+			}
+		}
+
+		logFn(fmt.Sprintf("📡 Mengirim instruksi RPC Launch ke Worker Node '%s'...", nodeID))
+		logFn(fmt.Sprintf("📦 Menyiapkan LXD %s '%s' (Image: %s, RAM: %dGB, Cores: %d)...", req.Type, req.Name, req.Image, req.RAMGB, req.CPUCores))
+
+		resp, err := s.hub.SendRPC(nodeID, req.Action, payload, rpcTimeout)
+		if err != nil {
+			logFn(fmt.Sprintf("❌ Error RPC Agent: %s", err.Error()))
+			return
+		}
+
+		if resp.Error != "" {
+			logFn(fmt.Sprintf("❌ Launch Error: %s", resp.Error))
+			return
+		}
+
+		logFn("⚙️ Mengkonfigurasi parameter resource & Cloud-Init...")
+		logFn(fmt.Sprintf("✅ SUCCESS: LXD container '%s' successfully created on Worker Node!", req.Name))
+		return
+	}
+
 	resp, err := s.hub.SendRPC(nodeID, req.Action, payload, rpcTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
