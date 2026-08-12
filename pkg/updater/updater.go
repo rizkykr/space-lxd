@@ -136,12 +136,14 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 	}
 	logFn("✅ Kompilasi biner berhasil!")
 
-	logFn("🔄 Merekonstruksi Service Daemon...")
-	restartCmd := exec.Command("sudo", "systemctl", "restart", "lxd-manager-master")
-	restartCmd.Dir = repoPath
-	restartCmd.Env = env
-	_ = restartCmd.Run()
-
+	logFn("🔄 Merekonstruksi & Mengisi Ulang Service Daemon...")
 	logFn("🎉 UPDATE SELESAI! Space LXD Dashboard telah diperbarui ke versi terbaru.")
+
+	// Delayed restart (1s) in background so HTTP response finishes clean before daemon restarts
+	go func() {
+		time.Sleep(1 * time.Second)
+		_ = exec.Command("sudo", "systemctl", "restart", "lxd-manager-master").Run()
+	}()
+
 	return nil
 }
