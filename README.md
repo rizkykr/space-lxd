@@ -32,14 +32,15 @@
 Jalankan perintah berikut di server Linux Anda (Ubuntu / Debian / AlmaLinux / Fedora):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rizkykr/space-lxd/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rizkykr/space-lxd/main/install.sh | sudo bash
 ```
 
 Script di atas akan secara **otomatis 100% (Zero Prerequisite Manual)**:
 1. Memeriksa & menginstall LXD daemon via Snap jika belum ada (`sudo snap install lxd && sudo lxd init --auto`).
-2. Menyiapkan biner & aset UI (tidak memerlukan instalasi Go / Node.js manual).
-3. Mengonfigurasi dan mengaktifkan **Systemd Service** `lxd-manager-master`.
-4. Memasang perintah CLI Interaktif **`space-lxd`** di terminal `/usr/local/bin/space-lxd`.
+2. Membuat **dedicated system user `space-lxd`** (Home: `/var/lib/space-lxd`) beserta SSH Key pair otomatis (`id_ed25519`).
+3. Menyiapkan biner & aset UI (tidak memerlukan instalasi Go / Node.js manual).
+4. Mengonfigurasi dan mengaktifkan **Systemd Service** `lxd-manager-master` di bawah user `space-lxd`.
+5. Memasang perintah CLI Interaktif **`space-lxd`** di terminal `/usr/local/bin/space-lxd`.
 
 Setelah instalasi selesai, buka Dashboard di browser:
 👉 **`http://<SERVER_IP>:9090`**
@@ -71,23 +72,38 @@ PORT=9090 ./bin/lxd-manager-master
 
 ---
 
+---
+
+## 🔗 Menghubungkan Worker Node (Multi-Node Cluster)
+
+Untuk menambahkan Worker Node baru ke dalam cluster, dapatkan Join Command / Token dari Dashboard Web (`Node Servers` -> `Add Node`), lalu jalankan perintah berikut sebagai `sudo` pada node worker:
+
+```bash
+curl -sSL http://<MASTER_IP>:9090/join.sh | sudo bash -s -- --master http://<MASTER_IP>:9090 --token <JOIN_TOKEN> --name "Worker-01"
+```
+
+Perintah di atas akan membuat user `space-lxd` + SSH key secara otomatis di node worker dan mendaftarkan agent ke Master Control Plane.
+
+---
+
 ## 💻 Interactive Terminal CLI (`space-lxd`)
 
 Space LXD Dashboard menyediakan **Menu CLI Interaktif Terminal** yang dapat diakses langsung dari mana saja di terminal Anda:
 
 ```bash
 # Buka Menu CLI Interaktif di terminal
-space-lxd
+sudo space-lxd
 
 # Perintah Langsung (CLI Quick Commands):
-space-lxd status    # Cek status kesehatan service & port API
-space-lxd start     # Memulai layanan Master
-space-lxd stop      # Menghentikan layanan
-space-lxd restart   # Restart layanan
-space-lxd list      # Tampilkan list LXD container aktif
-space-lxd shell     # Hubungkan langsung ke terminal container (lxc exec)
-space-lxd logs      # Tampilkan streaming log realtime (journalctl / file log)
-space-lxd rebuild   # Rebuild React UI & Go binaries
+sudo space-lxd status    # Cek status kesehatan service & port API
+sudo space-lxd start     # Memulai layanan Master
+sudo space-lxd stop      # Menghentikan layanan
+sudo space-lxd restart   # Restart layanan
+sudo space-lxd list      # Tampilkan list LXD container aktif
+sudo space-lxd shell     # Hubungkan langsung ke terminal container (lxc exec)
+sudo space-lxd logs      # Tampilkan streaming log realtime (journalctl / file log)
+sudo space-lxd rebuild   # Rebuild React UI & Go binaries
+sudo space-lxd uninstall # Clean uninstall (Pilihan: Local server saja atau Cluster-wide seluruh node)
 ```
 
 ---
@@ -99,13 +115,14 @@ Direktori `scripts/` menyediakan skrip utilitas untuk pengelolaan aplikasi:
 | Script | Deskripsi |
 | :--- | :--- |
 | `space-lxd` | Perintah CLI Interaktif Terminal di `/usr/local/bin/space-lxd`. |
-| `./install.sh` | Skrip instalasi otomatis dan setup Systemd Service. |
+| `./install.sh` | Skrip instalasi otomatis (membuat user `space-lxd` & Systemd Service). |
+| `./scripts/join.sh` | Skrip pendaftaran & setup worker agent node baru. |
 | `./scripts/space-lxd-cli.sh` | Engine utama untuk Menu CLI Terminal `space-lxd`. |
 | `./scripts/build.sh` | Mengompilasi React UI (`npm run build`) dan Go binaries. |
 | `./scripts/start.sh` | Memulai layanan Master secara background / Systemd. |
 | `./scripts/stop.sh` | Menghentikan proses Master & Worker Agent. |
 | `./scripts/status.sh` | Memeriksa status proses, port 9090, dan Systemd service. |
-| `./scripts/uninstall.sh` | Menghapus instalasi biner dan Systemd service. |
+| `./scripts/uninstall.sh` | Menghapus instalasi (Pilihan: Local Server atau Cluster-wide seluruh node). |
 
 ---
 
