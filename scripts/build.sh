@@ -10,6 +10,17 @@ elif [ -x "/usr/local/go/bin/go" ]; then
   GO_CMD="/usr/local/go/bin/go"
 fi
 
+# ── Build React UI ─────────────────────────────────────────────────────────────
+if [ -f "web/package.json" ]; then
+  echo "🎨 Building React UI..."
+  cd web
+  npm install --legacy-peer-deps --silent 2>/dev/null || npm install --silent
+  npm run build
+  cd ..
+  echo "✅ React UI built successfully!"
+fi
+
+# ── Build Go Binaries ──────────────────────────────────────────────────────────
 echo "🔨 Building Space LXD Multi-Node Binaries..."
 
 mkdir -p bin
