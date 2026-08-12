@@ -183,7 +183,8 @@ chmod 600 /etc/lxd-manager/agent.env
 
 # ── Step 3: Agent Binary Download ──────────────────────────────────────────────
 echo "${DIM}[5/6] Mendownload binary lxd-manager-agent dari Master...${R}"
-curl -sSL -f "${MASTER_URL}/downloads/lxd-manager-agent" -o /usr/local/bin/lxd-manager-agent 2>/dev/null || {
+curl -sSL -f "${MASTER_URL}/downloads/lxd-manager-agent" -o /usr/local/bin/lxd-manager-agent 2>/dev/null || \
+curl -sSL -f "${MASTER_URL}/download/agent" -o /usr/local/bin/lxd-manager-agent 2>/dev/null || {
   echo "${YLW}⚠ Binary tidak ditemukan di master downloads. Menggunakan binary lokal jika ada...${R}"
   if [[ -f "./lxd-manager-agent" ]]; then
     cp ./lxd-manager-agent /usr/local/bin/lxd-manager-agent
