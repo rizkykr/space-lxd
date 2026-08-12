@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -104,11 +105,16 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 
 	logFn(fmt.Sprintf("📦 Pulling update terbaru dari GitHub 'rizkykr/space-lxd' di %s...", repoPath))
 
+	// Ensure service user has full write permissions to .git directory
+	_ = exec.Command("sudo", "chown", "-R", "space-lxd:space-lxd", filepath.Join(repoPath, ".git")).Run()
+
 	fetchCmd := exec.Command("git", "fetch", "--all")
 	fetchCmd.Dir = repoPath
 	fetchCmd.Env = env
 	if out, err := fetchCmd.CombinedOutput(); err != nil {
+		// Fallback try with sudo if normal fetch encounters permission issue
 		logFn(fmt.Sprintf("⚠️ Warning git fetch: %s", string(out)))
+		_ = exec.Command("sudo", "git", "-C", repoPath, "fetch", "--all").Run()
 	}
 
 	resetCmd := exec.Command("git", "reset", "--hard", "origin/main")
