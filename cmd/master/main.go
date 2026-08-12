@@ -131,6 +131,7 @@ func main() {
 	mux.HandleFunc("/ws/agent", srv.handleWSAgent)
 	mux.HandleFunc("/ws/dashboard", srv.handleWSDashboard)
 	mux.HandleFunc("/ws/terminal", srv.handleWSTerminal)
+	mux.HandleFunc("/ws/node-terminal", srv.handleWSNodeTerminal)
 
 	// Downloads & Scripts
 	mux.HandleFunc("/join.sh", srv.handleServeJoinScript)
@@ -837,6 +838,110 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Pipe WebSocket stdin -> PTY stdin
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		_, _ = ptmx.Write(msg)
+	}
+	close(done)
+}
+
+// handleWSNodeTerminal opens a PTY shell on the host node.
+// For the master node (or any node): spawns a local bash shell on the Master host.
+// Future: proxy to worker agent via agent WebSocket.
+func (s *Server) handleWSNodeTerminal(w http.ResponseWriter, r *http.Request) {
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	nodeID := r.URL.Query().Get("nodeId")
+
+	// Look up node info from DB to display context
+	nodes, _ := s.db.GetAllNodes()
+	var nodeIP, nodeName string
+	isMasterNode := true
+	for _, n := range nodes {
+		if n.ID == nodeID {
+			nodeIP = n.IP
+			nodeName = n.Name
+			isMasterNode = n.IsMaster
+			break
+		}
+	}
+
+	// For non-master worker nodes: show SSH hint, then fall through to local shell
+	if !isMasterNode && nodeID != "" && nodeID != "master" {
+		hint := fmt.Sprintf("\r\n\x1b[33m⚠ Worker node '%s' (%s) — membuka sesi host di Master Node.\x1b[0m\r\n", nodeName, nodeIP)
+		hint += "\x1b[2mTip: Untuk shell langsung di worker node, gunakan: ssh " + nodeIP + "\x1b[0m\r\n\r\n"
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(hint))
+	}
+
+	// Spawn local bash on the master host
+	cmd := exec.Command("bash")
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		cmd = exec.Command("sh")
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+		ptmx, err = pty.Start(cmd)
+	}
+	if err != nil {
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\nFailed to start host terminal: %v\r\n", err)))
+		return
+	}
+	defer func() {
+		_ = ptmx.Close()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+	}()
+
+	var wsMu sync.Mutex
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(25 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				wsMu.Lock()
+				err := conn.WriteMessage(websocket.PingMessage, nil)
+				wsMu.Unlock()
+				if err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := ptmx.Read(buf)
+			if err != nil {
+				break
+			}
+			wsMu.Lock()
+			writeErr := conn.WriteMessage(websocket.TextMessage, buf[:n])
+			wsMu.Unlock()
+			if writeErr != nil {
+				break
+			}
+		}
+	}()
+
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {

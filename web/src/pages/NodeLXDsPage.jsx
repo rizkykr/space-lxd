@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { Card, Button, Badge, Input } from '../components/ui/primitives';
 import { TerminalModal } from '../components/modals/TerminalModal';
+import { NodeHostTerminal } from '../components/terminal/NodeHostTerminal';
 import { ConfirmDialog } from '../components/modals/ConfirmDialog';
-import { Plus, ChevronRight, Layers, Sliders, Terminal, Square, Play, Trash2, Loader2 } from 'lucide-react';
+import { Plus, ChevronRight, Layers, Sliders, Terminal, Square, Play, Trash2, Loader2, Server } from 'lucide-react';
 
 export function NodeLXDsPage() {
   const { nodeId } = useParams();
   const navigate = useNavigate();
   const { nodes, fetchNodes, addToast, onOpenCreateLXD } = useOutletContext();
+  const [activeTab, setActiveTab] = useState('containers');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTerminalTarget, setActiveTerminalTarget] = useState(null);
   const [loadingAction, setLoadingAction] = useState('');
@@ -74,6 +76,10 @@ export function NodeLXDsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setActiveTab('terminal')}>
+            <Server className="size-4" data-icon="inline-start" />
+            <span>Host Terminal</span>
+          </Button>
           <Button onClick={onOpenCreateLXD}>
             <Plus className="size-4" data-icon="inline-start" />
             <span>Create LXD Container</span>
@@ -99,90 +105,142 @@ export function NodeLXDsPage() {
         </Card>
       </div>
 
-      {/* LXDs Search & Table */}
-      <Card className="p-3.5 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-          <Layers className="size-4 text-primary" />
-          <span>LXD Containers List ({filteredLXDs.length})</span>
-        </h2>
-
-        <Input
-          type="text"
-          placeholder="Cari container name, IP..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full sm:w-64"
-        />
+      {/* Tab Bar */}
+      <Card className="p-1 flex border-border bg-card font-medium text-xs">
+        <button
+          onClick={() => setActiveTab('containers')}
+          className={`flex-1 py-2.5 rounded-md transition font-medium text-center flex items-center justify-center gap-1.5 ${activeTab === 'containers' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <Layers className="size-3.5" />
+          LXD Containers ({nodeLXDs.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('terminal')}
+          className={`flex-1 py-2.5 rounded-md transition font-medium text-center flex items-center justify-center gap-1.5 ${activeTab === 'terminal' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <Server className="size-3.5" />
+          🖥 Host Terminal
+        </button>
       </Card>
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border text-[11px] font-mono text-muted-foreground uppercase tracking-wider bg-background">
-                <th className="py-3.5 px-4">Container Name</th>
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4">IPv4 Address</th>
-                <th className="py-3.5 px-4">RAM Allocation</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border text-xs font-sans">
-              {filteredLXDs.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="text-center py-12 text-muted-foreground font-mono">
-                    Belum ada container LXD di Node ini. Klik 'Create LXD Container' untuk menambahkan.
-                  </td>
+      {/* Tab: LXD Containers */}
+      <div className={activeTab === 'containers' ? 'block space-y-4' : 'hidden'}>
+        {/* Search */}
+        <Card className="p-3.5 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <Layers className="size-4 text-primary" />
+            <span>LXD Containers List ({filteredLXDs.length})</span>
+          </h2>
+          <Input
+            type="text"
+            placeholder="Cari container name, IP..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full sm:w-64"
+          />
+        </Card>
+
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border text-[11px] font-mono text-muted-foreground uppercase tracking-wider bg-background">
+                  <th className="py-3.5 px-4">Container Name</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4">IPv4 Address</th>
+                  <th className="py-3.5 px-4">RAM Allocation</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
-              ) : (
-                filteredLXDs.map((item, idx) => {
-                  const isRunning = item.status.toLowerCase() === 'running';
-                  const isItemLoading = loadingAction.endsWith(`_${item.name}`);
+              </thead>
+              <tbody className="divide-y divide-border text-xs font-sans">
+                {filteredLXDs.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="text-center py-12 text-muted-foreground font-mono">
+                      Belum ada container LXD di Node ini. Klik 'Create LXD Container' untuk menambahkan.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredLXDs.map((item, idx) => {
+                    const isRunning = item.status.toLowerCase() === 'running';
+                    const isItemLoading = loadingAction.endsWith(`_${item.name}`);
 
-                  return (
-                    <tr key={`${nodeId}-${item.name}-${idx}`} className="hover:bg-accent/50 transition cursor-pointer" onClick={() => navigate(`/lxds/${nodeId}/${item.name}`)}>
-                      <td className="py-3.5 px-4 font-bold text-foreground flex items-center gap-2">
-                        <span className={`size-2 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-muted-foreground'}`}></span>
-                        <span className="hover:underline text-primary">{item.name}</span>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono">
-                        <span className={isRunning ? 'text-emerald-400 font-bold' : 'text-muted-foreground'}>{item.status}</span>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-foreground">{item.ipv4 || '—'}</td>
-                      <td className="py-3.5 px-4 font-mono text-foreground">{item.ram_used_mb ? `${item.ram_used_mb} MB` : '—'}</td>
-                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button variant="ghost" size="icon" onClick={() => navigate(`/lxds/${nodeId}/${item.name}`)} title="Inspect Full LXD Detail Page">
-                            <Sliders className="size-3.5 text-muted-foreground" />
-                          </Button>
-                          {isRunning ? (
-                            <>
-                              <Button variant="ghost" size="icon" onClick={() => setActiveTerminalTarget(item)} title="Terminal Shell">
-                                <Terminal className="size-3.5 text-primary" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleLXDAction('stop', item.name)} disabled={isItemLoading} title="Stop LXD">
-                                {loadingAction === `stop_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 text-amber-400" />}
-                              </Button>
-                            </>
-                          ) : (
-                            <Button variant="ghost" size="icon" onClick={() => handleLXDAction('start', item.name)} disabled={isItemLoading} title="Start LXD">
-                              {loadingAction === `start_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 text-emerald-400" />}
+                    return (
+                      <tr key={`${nodeId}-${item.name}-${idx}`} className="hover:bg-accent/50 transition cursor-pointer" onClick={() => navigate(`/lxds/${nodeId}/${item.name}`)}>
+                        <td className="py-3.5 px-4 font-bold text-foreground flex items-center gap-2">
+                          <span className={`size-2 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-muted-foreground'}`}></span>
+                          <span className="hover:underline text-primary">{item.name}</span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono">
+                          <span className={isRunning ? 'text-emerald-400 font-bold' : 'text-muted-foreground'}>{item.status}</span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-foreground">{item.ipv4 || '—'}</td>
+                        <td className="py-3.5 px-4 font-mono text-foreground">{item.ram_used_mb ? `${item.ram_used_mb} MB` : '—'}</td>
+                        <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button variant="ghost" size="icon" onClick={() => navigate(`/lxds/${nodeId}/${item.name}`)} title="Inspect Full LXD Detail Page">
+                              <Sliders className="size-3.5 text-muted-foreground" />
                             </Button>
-                          )}
-                          <Button variant="ghost" size="icon" onClick={() => promptDeleteLXD(item.name)} disabled={isItemLoading} title="Delete LXD">
-                            {loadingAction === `delete_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5 text-destructive" />}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                            {isRunning ? (
+                              <>
+                                <Button variant="ghost" size="icon" onClick={() => setActiveTerminalTarget(item)} title="Terminal Shell">
+                                  <Terminal className="size-3.5 text-primary" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleLXDAction('stop', item.name)} disabled={isItemLoading} title="Stop LXD">
+                                  {loadingAction === `stop_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 text-amber-400" />}
+                                </Button>
+                              </>
+                            ) : (
+                              <Button variant="ghost" size="icon" onClick={() => handleLXDAction('start', item.name)} disabled={isItemLoading} title="Start LXD">
+                                {loadingAction === `start_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 text-emerald-400" />}
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" onClick={() => promptDeleteLXD(item.name)} disabled={isItemLoading} title="Delete LXD">
+                              {loadingAction === `delete_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5 text-destructive" />}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
 
+      {/* Tab: Host Terminal (persisted in DOM) */}
+      <div className={activeTab === 'terminal' ? 'block' : 'hidden'}>
+        <Card className="h-[580px] overflow-hidden flex flex-col border-border">
+          <div className="bg-background px-4 py-3 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="flex gap-1.5">
+                <span className="size-3 rounded-full bg-red-500/70"></span>
+                <span className="size-3 rounded-full bg-yellow-500/70"></span>
+                <span className="size-3 rounded-full bg-emerald-500/70"></span>
+              </div>
+              <Server className="size-4 text-amber-400 ml-1" />
+              <span className="font-mono text-xs text-foreground font-bold">
+                {targetNode?.name || nodeId}
+              </span>
+              <span className="text-[10px] font-mono text-muted-foreground">
+                ({targetNode?.ip || 'localhost'}) — Host Shell
+              </span>
+              {targetNode?.is_master && (
+                <span className="text-[10px] font-mono text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded">
+                  MASTER
+                </span>
+              )}
+            </div>
+            <div className="text-[10px] font-mono text-muted-foreground">
+              /ws/node-terminal
+            </div>
+          </div>
+          <NodeHostTerminal nodeId={nodeId} nodeName={targetNode?.name} />
+        </Card>
+      </div>
+
+      {/* LXD Container Terminal Modal */}
       {activeTerminalTarget && (
         <TerminalModal target={{ ...activeTerminalTarget, node_name: targetNode?.name || nodeId }} onClose={() => setActiveTerminalTarget(null)} />
       )}
