@@ -219,7 +219,7 @@ interactive_menu() {
     echo -e "  ${COLOR_BOLD}[8]${COLOR_RESET} 📄 View Realtime Service Logs"
     echo -e "  ${COLOR_BOLD}[9]${COLOR_RESET} 🔨 Rebuild React UI & Go Binaries"
     echo -e "  ${COLOR_BOLD}[10]${COLOR_RESET} 🔄 Check & Update Space LXD from GitHub"
-    echo -e "  ${COLOR_BOLD}[11]${COLOR_RESET} 🗑️ Clean Uninstall & Purge All Data (Total Reset)"
+    echo -e "  ${COLOR_BOLD}[11]${COLOR_RESET} 🗑️ Uninstall Manager (Local Server or Cluster-wide)"
     echo -e "  ${COLOR_BOLD}[0]${COLOR_RESET} 🚪 Exit CLI Menu"
     echo "======================================================"
     read -p "Pilihan Anda [0-11]: " choice

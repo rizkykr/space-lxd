@@ -14,6 +14,9 @@ COLOR_BOLD="\033[1m"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 
+SPACE_USER="space-lxd"
+SPACE_HOME="/var/lib/space-lxd"
+
 banner() {
   echo -e "${COLOR_CYAN}"
   echo "        🚀 SPACE LXD DASHBOARD INSTALLER"
@@ -22,14 +25,14 @@ banner() {
   echo -e "======================================================${COLOR_RESET}"
 }
 
-info() { echo -e "${COLOR_CYAN}[INFO]${COLOR_RESET} $1"; }
+info()    { echo -e "${COLOR_CYAN}[INFO]${COLOR_RESET} $1"; }
 success() { echo -e "${COLOR_GREEN}[SUCCESS]${COLOR_RESET} $1"; }
-warn() { echo -e "${COLOR_YELLOW}[WARN]${COLOR_RESET} $1"; }
-error() { echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} $1"; exit 1; }
+warn()    { echo -e "${COLOR_YELLOW}[WARN]${COLOR_RESET} $1"; }
+error()   { echo -e "${COLOR_RED}[ERROR]${COLOR_RESET} $1"; exit 1; }
 
 check_root() {
   if [ "$EUID" -ne 0 ]; then
-    warn "Installer disarankan dijalankan sebagai root (sudo) untuk setup Systemd Service."
+    error "Installer harus dijalankan sebagai root: sudo bash install.sh"
   fi
 }
 
@@ -45,15 +48,86 @@ detect_os() {
   fi
 }
 
+# ── Create dedicated service user & SSH key ─────────────────────────────────
+setup_service_user() {
+  info "Menyiapkan dedicated service user '${SPACE_USER}'..."
+
+  if id "${SPACE_USER}" &>/dev/null; then
+    success "User '${SPACE_USER}' sudah ada."
+  else
+    useradd --system \
+            --home-dir "${SPACE_HOME}" \
+            --create-home \
+            --shell /bin/bash \
+            --comment "Space LXD Dashboard Service User" \
+            "${SPACE_USER}"
+    success "User '${SPACE_USER}' berhasil dibuat."
+  fi
+
+  # Pastikan home dir ada dan dimiliki oleh user
+  mkdir -p "${SPACE_HOME}/.ssh"
+  chown -R "${SPACE_USER}:${SPACE_USER}" "${SPACE_HOME}"
+  chmod 750 "${SPACE_HOME}"
+  chmod 700 "${SPACE_HOME}/.ssh"
+
+  SSH_KEY="${SPACE_HOME}/.ssh/id_ed25519"
+
+  # Generate SSH key jika belum ada
+  if [ ! -f "${SSH_KEY}" ]; then
+    info "Membuat SSH key pair untuk user '${SPACE_USER}'..."
+    sudo -u "${SPACE_USER}" ssh-keygen -t ed25519 \
+      -C "space-lxd@$(hostname)" \
+      -f "${SSH_KEY}" \
+      -N "" -q
+    success "SSH key pair berhasil dibuat: ${SSH_KEY}"
+  else
+    success "SSH key pair sudah ada: ${SSH_KEY}"
+  fi
+
+  # Tambahkan public key ke authorized_keys (untuk SSH lokal / node terminal)
+  PUBKEY_FILE="${SSH_KEY}.pub"
+  AUTH_KEYS="${SPACE_HOME}/.ssh/authorized_keys"
+
+  if [ -f "${PUBKEY_FILE}" ]; then
+    PUBKEY_CONTENT=$(cat "${PUBKEY_FILE}")
+    if ! grep -qF "${PUBKEY_CONTENT}" "${AUTH_KEYS}" 2>/dev/null; then
+      echo "${PUBKEY_CONTENT}" >> "${AUTH_KEYS}"
+      success "Public key ditambahkan ke authorized_keys."
+    fi
+    chmod 600 "${AUTH_KEYS}"
+    chown "${SPACE_USER}:${SPACE_USER}" "${AUTH_KEYS}"
+  fi
+
+  # Tambahkan user ke grup lxd agar bisa akses lxc
+  if getent group lxd &>/dev/null; then
+    usermod -aG lxd "${SPACE_USER}" 2>/dev/null || true
+    success "User '${SPACE_USER}' ditambahkan ke grup 'lxd'."
+  fi
+
+  # Simpan SSH key info ke config
+  mkdir -p /etc/lxd-manager
+  cat > /etc/lxd-manager/service-user.env << EOF
+SPACE_USER="${SPACE_USER}"
+SPACE_HOME="${SPACE_HOME}"
+SSH_KEY="${SSH_KEY}"
+SSH_PUBKEY="${SSH_KEY}.pub"
+EOF
+  chmod 600 /etc/lxd-manager/service-user.env
+
+  success "Konfigurasi service user tersimpan di /etc/lxd-manager/service-user.env"
+  info "  📌 SSH Public Key: $(cat ${PUBKEY_FILE})"
+}
+
 check_lxd() {
   info "Checking LXD daemon installation..."
   if command -v lxc >/dev/null 2>&1; then
-    success "LXD CLI (lxc) found: $(lxc --version 2>/dev/null || echo 'installed')"
+    LXC_VER=$(lxc --version 2>/dev/null || echo "ok")
+    success "LXD CLI (lxc) found: ${LXC_VER}"
   else
     warn "LXD tidak ditemukan! Menginstall LXD via Snap..."
     if command -v snap >/dev/null 2>&1; then
-      sudo snap install lxd || error "Gagal menginstall LXD snap!"
-      sudo lxd init --auto || true
+      snap install lxd || error "Gagal menginstall LXD snap!"
+      lxd init --auto || true
       success "LXD berhasil diinstall dan diinisialisasi otomatis!"
     else
       error "Snap package manager tidak ditemukan! Harap install LXD secara manual pada host ini."
@@ -68,8 +142,8 @@ install_node_lts() {
   fi
   info "Menginstall Node.js versi LTS resmi (via NodeSource)..."
   if command -v apt-get >/dev/null 2>&1; then
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - || true
-    sudo apt-get install -y nodejs || true
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - || true
+    apt-get install -y nodejs || true
     success "Node.js LTS berhasil terpasang: $(node -v 2>/dev/null || echo 'OK')"
   fi
 }
@@ -88,12 +162,9 @@ install_golang_latest() {
 
   info "Mendownload ${GO_VER}.linux-${ARCH}.tar.gz dari official go.dev..."
   curl -fsSL "https://go.dev/dl/${GO_VER}.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz
-  sudo rm -rf /usr/local/go
-  sudo tar -C /usr/local -xzf /tmp/go.tar.gz
+  rm -rf /usr/local/go
+  tar -C /usr/local -xzf /tmp/go.tar.gz
   export PATH=$PATH:/usr/local/go/bin
-  if ! grep -q "/usr/local/go/bin" ~/.bashrc 2>/dev/null; then
-    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
-  fi
   success "Go compiler (${GO_VER}) berhasil terpasang!"
 }
 
@@ -108,24 +179,24 @@ ensure_repo() {
   info "Mengklon/memperbarui repositori resmi di ${INSTALL_DIR}..."
   if ! command -v git >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
-      sudo apt-get update && sudo apt-get install -y git || true
+      apt-get update && apt-get install -y git || true
     elif command -v dnf >/dev/null 2>&1; then
-      sudo dnf install -y git || true
+      dnf install -y git || true
     fi
   fi
 
-  sudo mkdir -p "${INSTALL_DIR}"
-  sudo chown -R ${USER}:${USER} "${INSTALL_DIR}" 2>/dev/null || true
+  mkdir -p "${INSTALL_DIR}"
+  chown -R "${SPACE_USER}:${SPACE_USER}" "${INSTALL_DIR}" 2>/dev/null || true
 
   if [ -d "${INSTALL_DIR}/.git" ]; then
     git -C "${INSTALL_DIR}" fetch --all || true
     git -C "${INSTALL_DIR}" reset --hard origin/main || true
     git -C "${INSTALL_DIR}" pull origin main || true
   else
-    sudo rm -rf "${INSTALL_DIR}"
-    sudo mkdir -p "${INSTALL_DIR}"
-    sudo chown -R ${USER}:${USER} "${INSTALL_DIR}" 2>/dev/null || true
+    rm -rf "${INSTALL_DIR}"
+    mkdir -p "${INSTALL_DIR}"
     git clone https://github.com/rizkykr/space-lxd.git "${INSTALL_DIR}"
+    chown -R "${SPACE_USER}:${SPACE_USER}" "${INSTALL_DIR}" 2>/dev/null || true
   fi
 
   ROOT_DIR="${INSTALL_DIR}"
@@ -137,21 +208,15 @@ build_project() {
   ensure_repo
   cd "${ROOT_DIR}"
 
-  if [ -f "${ROOT_DIR}/bin/lxd-manager-master" ] && [ -d "${ROOT_DIR}/web/dist" ]; then
-    success "Aset pre-built terdeteksi di ${ROOT_DIR}."
-    return
-  fi
-
   install_node_lts
   install_golang_latest
 
   info "Kompilasi dari source code di ${ROOT_DIR}..."
-  cd "${ROOT_DIR}"
   export PATH=$PATH:/usr/local/go/bin
 
   if [ -d "${ROOT_DIR}/web" ] && command -v npm >/dev/null 2>&1; then
     info "Building React Frontend UI..."
-    (cd "${ROOT_DIR}/web" && npm install && npm run build)
+    (cd "${ROOT_DIR}/web" && npm install --legacy-peer-deps && npm run build)
   fi
 
   info "Building Master & Agent Go Binaries..."
@@ -159,6 +224,7 @@ build_project() {
   go build -o "${ROOT_DIR}/bin/lxd-manager-master" "${ROOT_DIR}/cmd/master"
   go build -o "${ROOT_DIR}/bin/lxd-manager-agent" "${ROOT_DIR}/cmd/agent"
   cp "${ROOT_DIR}/bin/lxd-manager-agent" "${ROOT_DIR}/lxd-manager-agent" 2>/dev/null || true
+  chown -R "${SPACE_USER}:${SPACE_USER}" "${ROOT_DIR}/bin" 2>/dev/null || true
   success "Biner Space LXD berhasil dibuat!"
 }
 
@@ -170,7 +236,7 @@ setup_systemd() {
   fi
   PORT="${PORT:-9090}"
 
-  cat <<EOF | sudo tee /etc/systemd/system/lxd-manager-master.service >/dev/null
+  cat <<EOF | tee /etc/systemd/system/lxd-manager-master.service >/dev/null
 [Unit]
 Description=Space LXD Dashboard Master Control Plane
 After=network.target lxd.service
@@ -178,46 +244,53 @@ Wants=lxd.service
 
 [Service]
 Type=simple
-User=${USER}
+User=${SPACE_USER}
+Group=${SPACE_USER}
 WorkingDirectory=${ROOT_DIR}
 Environment="PORT=${PORT}"
+Environment="HOME=${SPACE_HOME}"
 ExecStart=${ROOT_DIR}/bin/lxd-manager-master
 Restart=always
 RestartSec=5
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-  sudo systemctl daemon-reload
-  sudo systemctl enable lxd-manager-master
-  sudo systemctl restart lxd-manager-master
+  systemctl daemon-reload
+  systemctl enable lxd-manager-master
+  systemctl restart lxd-manager-master
   success "Systemd Service 'lxd-manager-master' berhasil diaktifkan dan dijalankan!"
 
   info "Memasang perintah CLI Interaktif 'space-lxd' di /usr/local/bin/space-lxd..."
-  sudo chmod +x "${ROOT_DIR}/scripts/space-lxd-cli.sh"
-  sudo ln -sf "${ROOT_DIR}/scripts/space-lxd-cli.sh" /usr/local/bin/space-lxd || true
+  chmod +x "${ROOT_DIR}/scripts/space-lxd-cli.sh"
+  ln -sf "${ROOT_DIR}/scripts/space-lxd-cli.sh" /usr/local/bin/space-lxd || true
   success "Perintah 'space-lxd' berhasil terpasang di terminal!"
 }
 
 summary() {
   PORT="${PORT:-9090}"
   LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+  SSH_PUBKEY=$(cat "${SPACE_HOME}/.ssh/id_ed25519.pub" 2>/dev/null || echo "N/A")
 
   banner
-  success "SPACE LXD DASHBOARD BERHASIL DIDETEKSI & DIDEPLOY!"
+  success "SPACE LXD DASHBOARD BERHASIL DIDEPLOY!"
   echo ""
   echo -e "  🌐 Master Web Dashboard: ${COLOR_GREEN}http://${LOCAL_IP}:${PORT}${COLOR_RESET}"
   echo -e "  🖥️ Local Fallback URL:  ${COLOR_CYAN}http://localhost:${PORT}${COLOR_RESET}"
   echo ""
+  echo -e "  ${COLOR_BOLD}👤 Service User:${COLOR_RESET}"
+  echo -e "    • User    : ${COLOR_CYAN}${SPACE_USER}${COLOR_RESET}"
+  echo -e "    • Home    : ${COLOR_CYAN}${SPACE_HOME}${COLOR_RESET}"
+  echo -e "    • SSH Key : ${COLOR_CYAN}${SPACE_HOME}/.ssh/id_ed25519${COLOR_RESET}"
+  echo ""
   echo -e "  💻 ${COLOR_BOLD}CLI Interaktif Terminal:${COLOR_RESET}"
-  echo -e "    Ketik ${COLOR_GREEN}space-lxd${COLOR_RESET} di mana saja pada terminal untuk membuka Menu CLI Interaktif!"
+  echo -e "    Ketik ${COLOR_GREEN}space-lxd${COLOR_RESET} di mana saja pada terminal!"
   echo ""
   echo -e "  ${COLOR_BOLD}Status Service Commands:${COLOR_RESET}"
   echo -e "    • Systemd status: ${COLOR_YELLOW}sudo systemctl status lxd-manager-master${COLOR_RESET}"
-  echo -e "    • Cek status:     ${COLOR_YELLOW}space-lxd status${COLOR_RESET} atau ${COLOR_YELLOW}./scripts/status.sh${COLOR_RESET}"
-  echo -e "    • Stop service:   ${COLOR_YELLOW}space-lxd stop${COLOR_RESET} atau ${COLOR_YELLOW}./scripts/stop.sh${COLOR_RESET}"
-  echo -e "    • Start service:  ${COLOR_YELLOW}space-lxd start${COLOR_RESET} atau ${COLOR_YELLOW}./scripts/start.sh${COLOR_RESET}"
+  echo -e "    • Cek status:     ${COLOR_YELLOW}space-lxd status${COLOR_RESET}"
   echo ""
   echo "======================================================"
 }
@@ -227,6 +300,7 @@ main() {
   check_root
   detect_os
   check_lxd
+  setup_service_user
   build_project
   setup_systemd
   summary
