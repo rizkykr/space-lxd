@@ -206,18 +206,29 @@ var activeAgentTerms sync.Map // sessionID (ReqID) -> ptmx (io.ReadWriteCloser)
 
 func handleMasterMessage(conn *websocket.Conn, wsMu *sync.Mutex, lxdClient *lxd.Client, msg ws.WSMessage) {
 	switch msg.Type {
-	case ws.MsgTermOpen:
+	case ws.MsgTermOpen, ws.MsgHostTermOpen:
 		instName := msg.Action
 		sessionID := msg.ReqID
-		log.Printf("🖥️ [Agent Terminal Tunnel] Opening terminal for LXD '%s' (session %s)", instName, sessionID)
+		var cmd *exec.Cmd
 
-		lxcBin := lxd.FindLXCBin()
-		cmd := exec.Command(lxcBin, "exec", instName, "--", "bash")
+		if msg.Type == ws.MsgHostTermOpen {
+			log.Printf("🖥️ [Agent Host Terminal Tunnel] Opening Host Shell for Node '%s' (session %s)", msg.NodeID, sessionID)
+			cmd = exec.Command("bash")
+		} else {
+			log.Printf("🖥️ [Agent LXD Terminal Tunnel] Opening terminal for LXD '%s' (session %s)", instName, sessionID)
+			lxcBin := lxd.FindLXCBin()
+			cmd = exec.Command(lxcBin, "exec", instName, "--", "bash")
+		}
 		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 
 		ptmx, err := pty.Start(cmd)
 		if err != nil {
-			cmd = exec.Command(lxcBin, "exec", instName, "--", "sh")
+			if msg.Type == ws.MsgHostTermOpen {
+				cmd = exec.Command("sh")
+			} else {
+				lxcBin := lxd.FindLXCBin()
+				cmd = exec.Command(lxcBin, "exec", instName, "--", "sh")
+			}
 			cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 			ptmx, err = pty.Start(cmd)
 		}

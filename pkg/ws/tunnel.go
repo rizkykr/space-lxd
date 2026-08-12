@@ -15,14 +15,15 @@ import (
 type MessageType string
 
 const (
-	MsgRegister   MessageType = "REGISTER"
-	MsgHeartbeat  MessageType = "HEARTBEAT"
-	MsgRPCReq     MessageType = "RPC_REQ"
-	MsgRPCResp    MessageType = "RPC_RESP"
-	MsgTermOpen   MessageType = "TERM_OPEN"
-	MsgTermData   MessageType = "TERM_DATA"
-	MsgTermClose  MessageType = "TERM_CLOSE"
-	MsgTermResize MessageType = "TERM_RESIZE"
+	MsgRegister     MessageType = "REGISTER"
+	MsgHeartbeat    MessageType = "HEARTBEAT"
+	MsgRPCReq       MessageType = "RPC_REQ"
+	MsgRPCResp      MessageType = "RPC_RESP"
+	MsgTermOpen     MessageType = "TERM_OPEN"
+	MsgHostTermOpen MessageType = "HOST_TERM_OPEN"
+	MsgTermData     MessageType = "TERM_DATA"
+	MsgTermClose    MessageType = "TERM_CLOSE"
+	MsgTermResize   MessageType = "TERM_RESIZE"
 )
 
 type WSMessage struct {

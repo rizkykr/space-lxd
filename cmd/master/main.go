@@ -1016,8 +1016,8 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleWSNodeTerminal opens a PTY shell on the host node.
-// For the master node (or any node): spawns a local bash shell on the Master host.
-// Future: proxy to worker agent via agent WebSocket.
+// For worker nodes: tunnels direct host bash PTY shell over Agent WebSocket.
+// For master node: spawns a local bash shell on Master host.
 func (s *Server) handleWSNodeTerminal(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -1032,19 +1032,60 @@ func (s *Server) handleWSNodeTerminal(w http.ResponseWriter, r *http.Request) {
 	var nodeIP, nodeName string
 	isMasterNode := true
 	for _, n := range nodes {
-		if n.ID == nodeID {
+		if (n.ID == nodeID || n.Name == nodeID) && !n.IsMaster {
+			isMasterNode = false
+			nodeID = n.ID // Normalize ID
 			nodeIP = n.IP
+			if strings.TrimSpace(n.CustomIPDomain) != "" {
+				nodeIP = strings.TrimSpace(n.CustomIPDomain)
+			}
 			nodeName = n.Name
-			isMasterNode = n.IsMaster
 			break
 		}
 	}
 
-	// For non-master worker nodes: show SSH hint, then fall through to local shell
-	if !isMasterNode && nodeID != "" && nodeID != "master" {
-		hint := fmt.Sprintf("\r\n\x1b[33m⚠ Worker node '%s' (%s) — membuka sesi host di Master Node.\x1b[0m\r\n", nodeName, nodeIP)
-		hint += "\x1b[2mTip: Untuk shell langsung di worker node, gunakan: ssh " + nodeIP + "\x1b[0m\r\n\r\n"
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(hint))
+	if !isMasterNode {
+		sessionID := fmt.Sprintf("host_term_%d", time.Now().UnixNano())
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\x1b[32m🔌 Opening direct Host Shell WebSocket PTY Tunnel to Worker Node '%s' (%s)...\x1b[0m\r\n\r\n", nodeName, nodeIP)))
+
+		s.hub.RegisterTermSession(sessionID, conn)
+		defer s.hub.UnregisterTermSession(sessionID)
+
+		openMsg := ws.WSMessage{
+			Type:   ws.MsgHostTermOpen,
+			NodeID: nodeID,
+			ReqID:  sessionID,
+		}
+
+		if err := s.hub.SendWSMessage(nodeID, openMsg); err != nil {
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\n\x1b[31m❌ Worker Node Agent WS disconnect: %v\x1b[0m\r\n", err)))
+			return
+		}
+
+		defer func() {
+			closeMsg := ws.WSMessage{
+				Type:   ws.MsgTermClose,
+				NodeID: nodeID,
+				ReqID:  sessionID,
+			}
+			_ = s.hub.SendWSMessage(nodeID, closeMsg)
+		}()
+
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				break
+			}
+			payload, _ := json.Marshal(msg)
+			dataMsg := ws.WSMessage{
+				Type:    ws.MsgTermData,
+				NodeID:  nodeID,
+				ReqID:   sessionID,
+				Payload: payload,
+			}
+			_ = s.hub.SendWSMessage(nodeID, dataMsg)
+		}
+		return
 	}
 
 	// Spawn local bash on the master host
