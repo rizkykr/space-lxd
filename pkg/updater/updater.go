@@ -96,7 +96,7 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 		repoPath, _ = os.Getwd()
 	}
 
-	env := append(os.Environ(), "PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:"+os.Getenv("PATH"))
+	env := append(os.Environ(), "PATH=/home/space-lxd/.nvm/versions/node/v24.18.0/bin:/home/rizkykr/.nvm/versions/node/v24.18.0/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:"+os.Getenv("PATH"))
 
 	logFn(fmt.Sprintf("📦 Pulling update terbaru dari GitHub 'rizkykr/space-lxd' di %s...", repoPath))
 

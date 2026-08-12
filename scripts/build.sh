@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-export PATH="/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="/home/space-lxd/.nvm/versions/node/v24.18.0/bin:/home/rizkykr/.nvm/versions/node/v24.18.0/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 GO_CMD="go"
 if command -v go >/dev/null 2>&1; then
