@@ -136,6 +136,7 @@ func main() {
 	// Downloads & Scripts
 	mux.HandleFunc("/join.sh", srv.handleServeJoinScript)
 	mux.HandleFunc("/downloads/lxd-manager-agent", srv.handleDownloadAgent)
+	mux.HandleFunc("/download/agent", srv.handleDownloadAgent)
 
 	// Static Web Dashboard SPA
 	webDir := filepath.Join(".", "web", "dist")
@@ -1205,13 +1206,17 @@ func (s *Server) handleServeJoinScript(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDownloadAgent(w http.ResponseWriter, r *http.Request) {
-	agentBin := filepath.Join(".", "bin", "lxd-manager-agent")
+	repoPath := s.getRepoPath()
+	agentBin := filepath.Join(repoPath, "bin", "lxd-manager-agent")
 	if _, err := os.Stat(agentBin); os.IsNotExist(err) {
-		agentBin = filepath.Join(".", "lxd-manager-agent")
+		agentBin = filepath.Join(repoPath, "lxd-manager-agent")
+	}
+	if _, err := os.Stat(agentBin); os.IsNotExist(err) {
+		agentBin = filepath.Join(".", "bin", "lxd-manager-agent")
 	}
 	file, err := os.Open(agentBin)
 	if err != nil {
-		http.Error(w, "Agent binary not ready", http.StatusNotFound)
+		http.Error(w, "Agent binary not ready: "+err.Error(), http.StatusNotFound)
 		return
 	}
 	defer file.Close()
