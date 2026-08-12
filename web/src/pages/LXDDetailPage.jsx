@@ -555,7 +555,7 @@ export function LXDDetailPage() {
               <span className="text-[10px] font-mono text-muted-foreground">({targetNode?.name || nodeId})</span>
             </div>
           </div>
-          <EmbeddedTerminal name={lxdName} />
+          <EmbeddedTerminal name={lxdName} nodeId={nodeId} />
         </Card>
       </div>
 

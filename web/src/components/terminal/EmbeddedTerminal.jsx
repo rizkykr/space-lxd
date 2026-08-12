@@ -3,7 +3,7 @@ import { Terminal as XTerminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 
-export const EmbeddedTerminal = memo(function EmbeddedTerminal({ name }) {
+export const EmbeddedTerminal = memo(function EmbeddedTerminal({ name, nodeId }) {
   const containerRef = useRef(null);
   const termRef = useRef(null);
   const socketRef = useRef(null);
@@ -37,7 +37,8 @@ export const EmbeddedTerminal = memo(function EmbeddedTerminal({ name }) {
 
     function connectWS() {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(name)}`;
+      const nodeQuery = nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : '';
+      const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(name)}${nodeQuery}`;
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 

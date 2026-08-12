@@ -796,28 +796,52 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	instName := r.URL.Query().Get("name")
+	nodeID := r.URL.Query().Get("nodeId")
+
 	if instName == "" {
 		_ = conn.WriteMessage(websocket.TextMessage, []byte("Error: LXD instance name required\r\n"))
 		return
 	}
 
 	lxcBin := lxd.FindLXCBin()
+	var cmd *exec.Cmd
 
-	// Try running: lxc exec <name> -- bash
-	cmd := exec.Command(lxcBin, "exec", instName, "--", "bash")
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-
-	ptmx, err := pty.Start(cmd)
-	if err != nil {
-		// Fallback to sh if bash is not in container
-		cmd = exec.Command(lxcBin, "exec", instName, "--", "sh")
-		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-		ptmx, err = pty.Start(cmd)
+	// Check if target node is a remote worker node
+	isWorker := false
+	var workerIP string
+	if nodeID != "" && nodeID != "local-master" {
+		nodes, _ := s.db.GetAllNodes()
+		for _, n := range nodes {
+			if n.ID == nodeID && !n.IsMaster {
+				isWorker = true
+				workerIP = n.IP
+				break
+			}
+		}
 	}
 
-	if err != nil {
-		// Fallback shell if container is not active or in dev mode
-		cmd = exec.Command("bash")
+	if isWorker && workerIP != "" {
+		// Target LXD is on remote worker node -> Execute via SSH to worker node
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\x1b[32m🔌 Connecting to container '%s' on Worker Node (%s)...\x1b[0m\r\n\r\n", instName, workerIP)))
+		sshOpts := []string{
+			"-o", "StrictHostKeyChecking=no",
+			"-o", "ConnectTimeout=10",
+			"-t",
+			fmt.Sprintf("space-lxd@%s", workerIP),
+			fmt.Sprintf("lxc exec %s -- bash || lxc exec %s -- sh", instName, instName),
+		}
+		cmd = exec.Command("ssh", sshOpts...)
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	} else {
+		// Target LXD is on local master node -> Execute local lxc exec
+		cmd = exec.Command(lxcBin, "exec", instName, "--", "bash")
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	}
+
+	ptmx, err := pty.Start(cmd)
+	if err != nil && !isWorker {
+		// Fallback to sh if bash is not in container
+		cmd = exec.Command(lxcBin, "exec", instName, "--", "sh")
 		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 		ptmx, err = pty.Start(cmd)
 	}
