@@ -270,11 +270,12 @@ func handleMasterMessage(conn *websocket.Conn, wsMu *sync.Mutex, lxdClient *lxd.
 				if err != nil {
 					break
 				}
+				rawStr, _ := json.Marshal(string(buf[:n]))
 				dataMsg := ws.WSMessage{
 					Type:    ws.MsgTermData,
 					NodeID:  msg.NodeID,
 					ReqID:   sessionID,
-					Payload: json.RawMessage(buf[:n]),
+					Payload: json.RawMessage(rawStr),
 				}
 				wsMu.Lock()
 				writeErr := conn.WriteJSON(dataMsg)

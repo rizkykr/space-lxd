@@ -212,7 +212,12 @@ func (h *Hub) HandleAgentMessage(agent *AgentConnection, msg WSMessage) {
 				termConn.Close()
 				h.termSessions.Delete(msg.ReqID)
 			} else {
-				_ = termConn.WriteMessage(websocket.TextMessage, []byte(msg.Payload))
+				var decodedData string
+				if err := json.Unmarshal(msg.Payload, &decodedData); err == nil {
+					_ = termConn.WriteMessage(websocket.TextMessage, []byte(decodedData))
+				} else {
+					_ = termConn.WriteMessage(websocket.TextMessage, []byte(msg.Payload))
+				}
 			}
 		}
 
