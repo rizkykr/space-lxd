@@ -19,7 +19,10 @@ const (
 	MsgHeartbeat  MessageType = "HEARTBEAT"
 	MsgRPCReq     MessageType = "RPC_REQ"
 	MsgRPCResp    MessageType = "RPC_RESP"
-	MsgTermData   MessageType = "TERMINAL_DATA"
+	MsgTermOpen   MessageType = "TERM_OPEN"
+	MsgTermData   MessageType = "TERM_DATA"
+	MsgTermClose  MessageType = "TERM_CLOSE"
+	MsgTermResize MessageType = "TERM_RESIZE"
 )
 
 type WSMessage struct {
@@ -63,10 +66,29 @@ type AgentConnection struct {
 }
 
 type Hub struct {
-	Agents    sync.Map // string (NodeID) -> *AgentConnection
-	rpcWaiters sync.Map // string (ReqID) -> chan WSMessage
-	upgrader  websocket.Upgrader
-	mu        sync.RWMutex
+	Agents       sync.Map // string (NodeID) -> *AgentConnection
+	rpcWaiters   sync.Map // string (ReqID) -> chan WSMessage
+	termSessions sync.Map // string (ReqID) -> *websocket.Conn (Web Browser UI Conn)
+	upgrader     websocket.Upgrader
+	mu           sync.RWMutex
+}
+
+func (h *Hub) RegisterTermSession(sessionID string, conn *websocket.Conn) {
+	h.termSessions.Store(sessionID, conn)
+}
+
+func (h *Hub) UnregisterTermSession(sessionID string) {
+	h.termSessions.Delete(sessionID)
+}
+
+func (h *Hub) SendWSMessage(nodeID string, msg WSMessage) error {
+	agent, ok := h.GetAgent(nodeID)
+	if !ok {
+		return fmt.Errorf("node agent '%s' is not connected", nodeID)
+	}
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	return agent.Conn.WriteJSON(msg)
 }
 
 func NewHub() *Hub {
@@ -162,6 +184,17 @@ func (h *Hub) HandleAgentMessage(agent *AgentConnection, msg WSMessage) {
 		if chVal, ok := h.rpcWaiters.Load(msg.ReqID); ok {
 			ch := chVal.(chan WSMessage)
 			ch <- msg
+		}
+
+	case MsgTermData, MsgTermClose:
+		if termConnVal, ok := h.termSessions.Load(msg.ReqID); ok {
+			termConn := termConnVal.(*websocket.Conn)
+			if msg.Type == MsgTermClose {
+				termConn.Close()
+				h.termSessions.Delete(msg.ReqID)
+			} else {
+				_ = termConn.WriteMessage(websocket.TextMessage, []byte(msg.Payload))
+			}
 		}
 
 	default:

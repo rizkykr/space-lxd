@@ -820,32 +820,109 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if isWorker && workerIP != "" {
-		// Clean port suffix if present (e.g. 100.86.76.76:58154 -> 100.86.76.76)
-		cleanIP := workerIP
-		if idx := strings.Index(cleanIP, ":"); idx != -1 {
-			cleanIP = cleanIP[:idx]
+	if isWorker {
+		sessionID := fmt.Sprintf("term_%d", time.Now().UnixNano())
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\x1b[32m🔌 Opening direct WebSocket PTY Tunnel to LXD '%s' on Worker Node...\x1b[0m\r\n\r\n", instName)))
+
+		s.hub.RegisterTermSession(sessionID, conn)
+		defer s.hub.UnregisterTermSession(sessionID)
+
+		// 1. Send TERM_OPEN to Worker Agent over Agent WebSocket
+		openMsg := ws.WSMessage{
+			Type:   ws.MsgTermOpen,
+			NodeID: nodeID,
+			ReqID:  sessionID,
+			Action: instName,
 		}
 
-		// Target LXD is on remote worker node -> Execute via SSH to worker node
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\x1b[32m🔌 Connecting to container '%s' on Worker Node (%s)...\x1b[0m\r\n\r\n", instName, cleanIP)))
-		sshOpts := []string{
-			"-o", "StrictHostKeyChecking=no",
-			"-o", "ConnectTimeout=10",
-			"-t",
-			fmt.Sprintf("space-lxd@%s", cleanIP),
-			fmt.Sprintf("lxc exec %s -- bash || lxc exec %s -- sh", instName, instName),
+		if err := s.hub.SendWSMessage(nodeID, openMsg); err != nil {
+			// Fallback to SSH exec if Agent WS is unavailable
+			cleanIP := workerIP
+			if idx := strings.Index(cleanIP, ":"); idx != -1 {
+				cleanIP = cleanIP[:idx]
+			}
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\x1b[33m⚠️ Agent WS Tunnel unavailable (%v). Falling back to SSH tunnel (%s)...\x1b[0m\r\n\r\n", err, cleanIP)))
+			
+			sshOpts := []string{
+				"-o", "StrictHostKeyChecking=no",
+				"-o", "ConnectTimeout=10",
+				"-t",
+				fmt.Sprintf("space-lxd@%s", cleanIP),
+				fmt.Sprintf("lxc exec %s -- bash || lxc exec %s -- sh", instName, instName),
+			}
+			cmd = exec.Command("ssh", sshOpts...)
+			cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+
+			ptmx, ptyErr := pty.Start(cmd)
+			if ptyErr != nil {
+				_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\nFailed to start terminal: %v\r\n", ptyErr)))
+				return
+			}
+			defer func() {
+				_ = ptmx.Close()
+				if cmd.Process != nil {
+					_ = cmd.Process.Kill()
+				}
+			}()
+
+			var wsMu sync.Mutex
+			done := make(chan struct{})
+			go func() {
+				buf := make([]byte, 4096)
+				for {
+					n, err := ptmx.Read(buf)
+					if err != nil {
+						break
+					}
+					wsMu.Lock()
+					_ = conn.WriteMessage(websocket.TextMessage, buf[:n])
+					wsMu.Unlock()
+				}
+			}()
+			for {
+				_, msg, err := conn.ReadMessage()
+				if err != nil {
+					break
+				}
+				_, _ = ptmx.Write(msg)
+			}
+			close(done)
+			return
 		}
-		cmd = exec.Command("ssh", sshOpts...)
-		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-	} else {
-		// Target LXD is on local master node -> Execute local lxc exec
-		cmd = exec.Command(lxcBin, "exec", instName, "--", "bash")
-		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+
+		// Read browser input -> send TERM_DATA to Agent WS
+		defer func() {
+			closeMsg := ws.WSMessage{
+				Type:   ws.MsgTermClose,
+				NodeID: nodeID,
+				ReqID:  sessionID,
+			}
+			_ = s.hub.SendWSMessage(nodeID, closeMsg)
+		}()
+
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				break
+			}
+			payload, _ := json.Marshal(msg)
+			dataMsg := ws.WSMessage{
+				Type:    ws.MsgTermData,
+				NodeID:  nodeID,
+				ReqID:   sessionID,
+				Payload: payload,
+			}
+			_ = s.hub.SendWSMessage(nodeID, dataMsg)
+		}
+		return
 	}
 
+	// Target LXD is on local master node -> Execute local lxc exec
+	cmd = exec.Command(lxcBin, "exec", instName, "--", "bash")
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+
 	ptmx, err := pty.Start(cmd)
-	if err != nil && !isWorker {
+	if err != nil {
 		// Fallback to sh if bash is not in container
 		cmd = exec.Command(lxcBin, "exec", instName, "--", "sh")
 		cmd.Env = append(os.Environ(), "TERM=xterm-256color")

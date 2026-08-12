@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 
 	"lxd-manager-dashboard/pkg/config"
@@ -200,8 +202,98 @@ func runAgentLoop(cfg config.AgentConfig, lxdClient *lxd.Client, interrupt chan 
 	}
 }
 
+var activeAgentTerms sync.Map // sessionID (ReqID) -> ptmx (io.ReadWriteCloser)
+
 func handleMasterMessage(conn *websocket.Conn, wsMu *sync.Mutex, lxdClient *lxd.Client, msg ws.WSMessage) {
-	if msg.Type == ws.MsgRPCReq {
+	switch msg.Type {
+	case ws.MsgTermOpen:
+		instName := msg.Action
+		sessionID := msg.ReqID
+		log.Printf("🖥️ [Agent Terminal Tunnel] Opening terminal for LXD '%s' (session %s)", instName, sessionID)
+
+		lxcBin := lxd.FindLXCBin()
+		cmd := exec.Command(lxcBin, "exec", instName, "--", "bash")
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+
+		ptmx, err := pty.Start(cmd)
+		if err != nil {
+			cmd = exec.Command(lxcBin, "exec", instName, "--", "sh")
+			cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+			ptmx, err = pty.Start(cmd)
+		}
+
+		if err != nil {
+			log.Printf("❌ Failed to open terminal for '%s': %v", instName, err)
+			closeMsg := ws.WSMessage{
+				Type:   ws.MsgTermClose,
+				NodeID: msg.NodeID,
+				ReqID:  sessionID,
+				Error:  err.Error(),
+			}
+			wsMu.Lock()
+			_ = conn.WriteJSON(closeMsg)
+			wsMu.Unlock()
+			return
+		}
+
+		activeAgentTerms.Store(sessionID, ptmx)
+
+		// Read PTY output -> Send to Master via WebSocket
+		go func() {
+			defer func() {
+				_ = ptmx.Close()
+				activeAgentTerms.Delete(sessionID)
+				closeMsg := ws.WSMessage{
+					Type:   ws.MsgTermClose,
+					NodeID: msg.NodeID,
+					ReqID:  sessionID,
+				}
+				wsMu.Lock()
+				_ = conn.WriteJSON(closeMsg)
+				wsMu.Unlock()
+			}()
+
+			buf := make([]byte, 4096)
+			for {
+				n, err := ptmx.Read(buf)
+				if err != nil {
+					break
+				}
+				dataMsg := ws.WSMessage{
+					Type:    ws.MsgTermData,
+					NodeID:  msg.NodeID,
+					ReqID:   sessionID,
+					Payload: json.RawMessage(buf[:n]),
+				}
+				wsMu.Lock()
+				writeErr := conn.WriteJSON(dataMsg)
+				wsMu.Unlock()
+				if writeErr != nil {
+					break
+				}
+			}
+		}()
+
+	case ws.MsgTermData:
+		sessionID := msg.ReqID
+		if val, ok := activeAgentTerms.Load(sessionID); ok {
+			ptmx := val.(io.ReadWriteCloser)
+			var inputData []byte
+			if err := json.Unmarshal(msg.Payload, &inputData); err == nil {
+				_, _ = ptmx.Write(inputData)
+			} else {
+				_, _ = ptmx.Write([]byte(msg.Payload))
+			}
+		}
+
+	case ws.MsgTermClose:
+		sessionID := msg.ReqID
+		if val, ok := activeAgentTerms.LoadAndDelete(sessionID); ok {
+			ptmx := val.(io.ReadWriteCloser)
+			_ = ptmx.Close()
+		}
+
+	case ws.MsgRPCReq:
 		var req ws.RPCReqPayload
 		_ = json.Unmarshal(msg.Payload, &req)
 
