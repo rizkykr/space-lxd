@@ -824,8 +824,9 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 	if nodeID != "" && nodeID != "local-master" {
 		nodes, _ := s.db.GetAllNodes()
 		for _, n := range nodes {
-			if n.ID == nodeID && !n.IsMaster {
+			if (n.ID == nodeID || n.Name == nodeID) && !n.IsMaster {
 				isWorker = true
+				nodeID = n.ID // Normalize to real Node ID
 				workerIP = n.IP
 				if strings.TrimSpace(n.CustomIPDomain) != "" {
 					workerIP = strings.TrimSpace(n.CustomIPDomain)
