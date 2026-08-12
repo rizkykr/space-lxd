@@ -22,8 +22,16 @@ danger()  { echo -e "${COLOR_RED}[!!!]${COLOR_RESET} $1"; }
 
 # ── Ambil daftar node dari API (jika master masih running) ─────────────────────
 get_all_nodes() {
-  curl -s --max-time 5 "${MASTER_URL}/api/nodes" 2>/dev/null \
-    | grep -o '"ip":"[^"]*' | cut -d'"' -f4 | grep -v '^$' || echo ""
+  # Parse custom_ip_domain first, otherwise fallback to ip from API JSON
+  curl -s --max-time 5 "${MASTER_URL}/api/nodes" 2>/dev/null | grep -o '{[^{}]*}' | while read -r line; do
+    custom_dom=$(echo "$line" | grep -o '"custom_ip_domain":"[^"]*' | cut -d'"' -f4)
+    raw_ip=$(echo "$line" | grep -o '"ip":"[^"]*' | cut -d'"' -f4)
+    if [ -n "$custom_dom" ]; then
+      echo "$custom_dom"
+    elif [ -n "$raw_ip" ]; then
+      echo "$raw_ip"
+    fi
+  done
 }
 
 # ── Uninstall agent di node worker via SSH ─────────────────────────────────────
