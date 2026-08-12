@@ -5,7 +5,7 @@ import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { X, Terminal } from 'lucide-react';
 
-const TerminalPane = memo(function TerminalPane({ name }) {
+const TerminalPane = memo(function TerminalPane({ name, nodeId }) {
   const containerRef = useRef(null);
   const termRef = useRef(null);
   const socketRef = useRef(null);
@@ -38,7 +38,8 @@ const TerminalPane = memo(function TerminalPane({ name }) {
 
     function connectWS() {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(name)}`;
+      const nodeQuery = nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : '';
+      const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(name)}${nodeQuery}`;
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
@@ -90,12 +91,13 @@ const TerminalPane = memo(function TerminalPane({ name }) {
         termRef.current = null;
       }
     };
-  }, [name]);
+  }, [name, nodeId]);
 
   return <div ref={containerRef} className="w-full h-full p-2" />;
 });
 
 export function TerminalModal({ target, onClose }) {
+  const targetNodeId = target?.node_id || target?.nodeId;
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
       <Card className="max-w-4xl w-full h-[600px] flex flex-col shadow-2xl relative bg-[#090d16] border-border overflow-hidden">
@@ -103,14 +105,14 @@ export function TerminalModal({ target, onClose }) {
           <div className="flex items-center gap-2">
             <Terminal className="size-4 text-primary" />
             <span className="font-mono text-xs text-foreground font-bold">{target?.name}</span>
-            <span className="text-[10px] font-mono text-muted-foreground">({target?.node_name || 'local'})</span>
+            <span className="text-[10px] font-mono text-muted-foreground">({target?.node_name || targetNodeId || 'local'})</span>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="size-4" />
           </Button>
         </div>
         <div className="flex-1 w-full h-full relative overflow-hidden bg-[#090d16]">
-          <TerminalPane name={target?.name} />
+          <TerminalPane name={target?.name} nodeId={targetNodeId} />
         </div>
       </Card>
     </div>
