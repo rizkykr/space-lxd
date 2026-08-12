@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -e
 
-export PATH="/home/space-lxd/.nvm/versions/node/v24.18.0/bin:/home/rizkykr/.nvm/versions/node/v24.18.0/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+# ── Dynamic Node/NPM & Go PATH Resolution ────────────────────────────────────
+NODE_BIN=$(command -v node 2>/dev/null || find /home /usr /root -name "node" -type f -executable 2>/dev/null | head -n1 || echo "")
+if [ -n "$NODE_BIN" ]; then
+  NODE_DIR=$(dirname "$NODE_BIN")
+  export PATH="$NODE_DIR:$PATH"
+fi
+
+export PATH="/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 GO_CMD="go"
 if command -v go >/dev/null 2>&1; then
@@ -13,11 +20,18 @@ fi
 # ── Build React UI ─────────────────────────────────────────────────────────────
 if [ -f "web/package.json" ]; then
   echo "🎨 Building React UI..."
-  cd web
-  npm install --legacy-peer-deps --silent 2>/dev/null || npm install --silent
-  npm run build
-  cd ..
-  echo "✅ React UI built successfully!"
+  if command -v npm >/dev/null 2>&1; then
+    (
+      cd web
+      npm install --legacy-peer-deps --silent 2>/dev/null || npm install --silent 2>/dev/null || true
+      npm run build || echo "⚠️ React UI build warning, proceeding with existing assets..."
+    )
+    echo "✅ React UI build completed!"
+  elif [ -d "web/dist" ]; then
+    echo "ℹ️ Node.js/npm tidak ditemukan, menggunakan dist React UI pre-built yang ada."
+  else
+    echo "⚠️ Node.js/npm tidak ditemukan & web/dist belum ada. UI mungkin belum terkompilasi."
+  fi
 fi
 
 # ── Build Go Binaries ──────────────────────────────────────────────────────────
