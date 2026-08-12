@@ -12,6 +12,7 @@ export function AuditLogsPage() {
       .catch(console.error);
   }, []);
 
+  const uniqueActions = ['ALL', ...Array.from(new Set(logs.map(l => l.action)))];
   const filteredLogs = filterAction === 'ALL' ? logs : logs.filter(l => l.action === filterAction);
 
   return (
@@ -27,11 +28,11 @@ export function AuditLogsPage() {
           onChange={e => setFilterAction(e.target.value)}
           className="w-auto"
         >
-          <option value="ALL">🌐 All Event Actions ({logs.length})</option>
-          <option value="USER_SETUP">USER_SETUP</option>
-          <option value="NODE_JOIN">NODE_JOIN</option>
-          <option value="PASSWORD_CHANGE">PASSWORD_CHANGE</option>
-          <option value="ADD_SSH_KEY">ADD_SSH_KEY</option>
+          {uniqueActions.map(act => (
+            <option key={act} value={act}>
+              {act === 'ALL' ? `🌐 All Event Actions (${logs.length})` : act}
+            </option>
+          ))}
         </Select>
       </div>
 

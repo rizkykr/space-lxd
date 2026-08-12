@@ -11,6 +11,8 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
 
   useEffect(() => {
     fetchVersionInfo();
+    const interval = setInterval(fetchVersionInfo, 30000); // Auto check version every 30 seconds
+    return () => clearInterval(interval);
   }, []);
 
   const fetchVersionInfo = async () => {

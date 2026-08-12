@@ -455,6 +455,7 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Gagal mengubah nama node: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		_ = s.db.LogAuditAction("RENAME_NODE", nodeID, fmt.Sprintf("Renamed node to '%s'", newName))
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Nama node berhasil diperbarui"})
 		return
@@ -466,6 +467,7 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Gagal mengubah IP/Domain node: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		_ = s.db.LogAuditAction("UPDATE_NODE_DOMAIN", nodeID, fmt.Sprintf("Set custom IP/Domain to '%s'", customDomain))
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Domain/IP Custom node berhasil diperbarui"})
 		return
@@ -493,6 +495,7 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Gagal menghapus node dari database: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		_ = s.db.LogAuditAction("DELETE_NODE", nodeID, "Deleted worker node and purged all containers")
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Node dan seluruh LXD container di dalamnya berhasil dihapus"})
@@ -505,26 +508,37 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 		switch req.Action {
 		case "start":
 			err = lxdClient.StartInstance(req.Name)
+			if err == nil { _ = s.db.LogAuditAction("START_LXD", req.Name, "Started LXD container on Master") }
 		case "stop":
 			err = lxdClient.StopInstance(req.Name)
+			if err == nil { _ = s.db.LogAuditAction("STOP_LXD", req.Name, "Stopped LXD container on Master") }
 		case "restart":
 			err = lxdClient.RestartInstance(req.Name)
+			if err == nil { _ = s.db.LogAuditAction("RESTART_LXD", req.Name, "Restarted LXD container on Master") }
 		case "pause":
 			err = lxdClient.PauseInstance(req.Name)
+			if err == nil { _ = s.db.LogAuditAction("PAUSE_LXD", req.Name, "Paused LXD container on Master") }
 		case "resume":
 			err = lxdClient.ResumeInstance(req.Name)
+			if err == nil { _ = s.db.LogAuditAction("RESUME_LXD", req.Name, "Resumed LXD container on Master") }
 		case "delete":
 			err = lxdClient.DeleteInstance(req.Name)
+			if err == nil { _ = s.db.LogAuditAction("DELETE_LXD", req.Name, "Deleted LXD container on Master") }
 		case "update_config":
 			err = lxdClient.UpdateInstanceConfig(req.Name, req.RAMGB, req.CPUCores, req.Autostart)
+			if err == nil { _ = s.db.LogAuditAction("UPDATE_CONFIG", req.Name, fmt.Sprintf("Updated RAM: %dGB, Cores: %d", req.RAMGB, req.CPUCores)) }
 		case "create_snapshot":
 			err = lxdClient.CreateSnapshot(req.Name, req.SnapName)
+			if err == nil { _ = s.db.LogAuditAction("CREATE_SNAPSHOT", req.Name, fmt.Sprintf("Created snapshot '%s'", req.SnapName)) }
 		case "restore_snapshot":
 			err = lxdClient.RestoreSnapshot(req.Name, req.SnapName)
+			if err == nil { _ = s.db.LogAuditAction("RESTORE_SNAPSHOT", req.Name, fmt.Sprintf("Restored snapshot '%s'", req.SnapName)) }
 		case "delete_snapshot":
 			err = lxdClient.DeleteSnapshot(req.Name, req.SnapName)
+			if err == nil { _ = s.db.LogAuditAction("DELETE_SNAPSHOT", req.Name, fmt.Sprintf("Deleted snapshot '%s'", req.SnapName)) }
 		case "update_snapshot_schedule":
 			err = lxdClient.UpdateSnapshotSchedule(req.Name, req.SnapEnabled, req.SnapCron, req.RetentionDays)
+			if err == nil { _ = s.db.LogAuditAction("UPDATE_SNAPSHOT_SCHEDULE", req.Name, fmt.Sprintf("Updated snapshot schedule: %s", req.SnapCron)) }
 		case "get_snapshots":
 			snapData, snapErr := lxdClient.GetInstanceSnapshotsAndSchedule(req.Name)
 			if snapErr != nil {
@@ -570,11 +584,15 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 					logFn(fmt.Sprintf("❌ Error: %s", err.Error()))
 					return
 				}
+				_ = s.db.LogAuditAction("LAUNCH_LXD", req.Name, fmt.Sprintf("Launched LXD %s '%s' on Master (Image: %s, RAM: %dGB)", instType, req.Name, img, ramGB))
 				logFn(fmt.Sprintf("✅ SUCCESS: LXD container '%s' successfully created!", req.Name))
 				return
 			}
 
 			err = lxdClient.LaunchInstance(req.Name, img, instType, ramGB, cpuCores, req.DiskGB, req.Autostart, req.SSHKey, req.TemplatePreset)
+			if err == nil {
+				_ = s.db.LogAuditAction("LAUNCH_LXD", req.Name, fmt.Sprintf("Launched LXD %s '%s' on Master (Image: %s)", instType, req.Name, img))
+			}
 		default:
 			err = fmt.Errorf("unknown action '%s'", req.Action)
 		}
@@ -638,6 +656,7 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 
 		logFn("⚙️ Mengkonfigurasi parameter resource & Cloud-Init...")
 		logFn(fmt.Sprintf("✅ SUCCESS: LXD container '%s' successfully created on Worker Node!", req.Name))
+		_ = s.db.LogAuditAction("LAUNCH_LXD", req.Name, fmt.Sprintf("Launched LXD '%s' on Worker Node '%s'", req.Name, nodeID))
 		return
 	}
 
@@ -645,6 +664,10 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if resp.Error == "" {
+		_ = s.db.LogAuditAction(strings.ToUpper(req.Action)+"_LXD", req.Name, fmt.Sprintf("Executed '%s' on Worker Node '%s'", req.Action, nodeID))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
