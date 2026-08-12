@@ -821,13 +821,19 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isWorker && workerIP != "" {
+		// Clean port suffix if present (e.g. 100.86.76.76:58154 -> 100.86.76.76)
+		cleanIP := workerIP
+		if idx := strings.Index(cleanIP, ":"); idx != -1 {
+			cleanIP = cleanIP[:idx]
+		}
+
 		// Target LXD is on remote worker node -> Execute via SSH to worker node
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\x1b[32m🔌 Connecting to container '%s' on Worker Node (%s)...\x1b[0m\r\n\r\n", instName, workerIP)))
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\x1b[32m🔌 Connecting to container '%s' on Worker Node (%s)...\x1b[0m\r\n\r\n", instName, cleanIP)))
 		sshOpts := []string{
 			"-o", "StrictHostKeyChecking=no",
 			"-o", "ConnectTimeout=10",
 			"-t",
-			fmt.Sprintf("space-lxd@%s", workerIP),
+			fmt.Sprintf("space-lxd@%s", cleanIP),
 			fmt.Sprintf("lxc exec %s -- bash || lxc exec %s -- sh", instName, instName),
 		}
 		cmd = exec.Command("ssh", sshOpts...)
