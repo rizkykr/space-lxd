@@ -104,6 +104,12 @@ setup_service_user() {
     success "User '${SPACE_USER}' ditambahkan ke grup 'lxd'."
   fi
 
+  # Enable IPv4 Forwarding for Cross-Node Subnet Routing
+  sysctl -w net.ipv4.ip_forward=1 &>/dev/null || true
+  if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+  fi
+
   # Simpan SSH key info ke config
   mkdir -p /etc/lxd-manager
   cat > /etc/lxd-manager/service-user.env << EOF

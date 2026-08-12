@@ -61,6 +61,23 @@ else
   echo "${GRN}✓ LXD Daemon terdeteksi (${LXC_VER}).${R}"
 fi
 
+# ── Ensure LXD Virtual Bridge & IP Forwarding (Best Practice Enterprise Isolation) ──
+if ! lxc network show lxdbr0 &>/dev/null; then
+  echo "${YLW}⚡ Constructing secure local LXD virtual bridge 'lxdbr0'...${R}"
+  # Generate unique 10.171.x.1/24 subnet based on hostname hash to avoid cross-node subnet collisions
+  NODE_HASH=$(cksum <<< "$NODE_NAME" | awk '{print $1}')
+  SUBNET_OCTET=$(( (NODE_HASH % 200) + 10 ))
+  lxc network create lxdbr0 ipv4.address="10.171.${SUBNET_OCTET}.1/24" ipv4.nat=true ipv6.address=none 2>/dev/null || true
+  lxc profile device add default eth0 nictype=bridged parent=lxdbr0 name=eth0 2>/dev/null || true
+  echo "${GRN}✓ LXD Virtual Subnet initialized (10.171.${SUBNET_OCTET}.1/24 NAT).${R}"
+fi
+
+# Enable Kernel IPv4 Forwarding for Cross-Node / Tailscale Mesh Routing
+sysctl -w net.ipv4.ip_forward=1 &>/dev/null || true
+if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
+  echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+fi
+
 # ── Step 0b: Buat Dedicated Service User ────────────────────────────────────────
 echo "${DIM}[2/6] Menyiapkan dedicated service user '${SPACE_USER}'...${R}"
 
