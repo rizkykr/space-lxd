@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
-
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -22,18 +24,42 @@ import (
 
 func main() {
 	cfg := config.LoadAgentConfig()
-	log.Printf("🚀 Starting LXD Manager Agent | Node ID: %s | Master: %s", cfg.NodeID, cfg.MasterURL)
+	log.Printf("🚀 Starting Enterprise LXD Manager Agent | Node ID: %s | Master: %s", cfg.NodeID, cfg.MasterURL)
 
 	lxdClient := lxd.NewClient(cfg.LXDSocket)
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
+	// Exponential Backoff parameters: min 2s, max 60s
+	minBackoff := 2 * time.Second
+	maxBackoff := 60 * time.Second
+	currentBackoff := minBackoff
+
+	// LXD Socket Fail Count for Auto-Healing Watchdog
+	lxdFailCount := 0
+
 	for {
-		err := runAgentLoop(cfg, lxdClient, interrupt)
+		err := runAgentLoop(cfg, lxdClient, interrupt, &lxdFailCount)
 		if err != nil {
-			log.Printf("⚠️ Agent connection lost: %v. Retrying in 5 seconds...", err)
-			time.Sleep(5 * time.Second)
+			// Calculate jittered exponential backoff
+			jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+			sleepDuration := currentBackoff + jitter
+
+			log.Printf("⚠️ Agent connection lost: %v. Retrying in %v...", err, sleepDuration.Truncate(100*time.Millisecond))
+			
+			select {
+			case <-time.After(sleepDuration):
+			case <-interrupt:
+				log.Println("👋 Agent stopping gracefully during backoff.")
+				return
+			}
+
+			// Double the backoff for next time up to maxBackoff
+			currentBackoff *= 2
+			if currentBackoff > maxBackoff {
+				currentBackoff = maxBackoff
+			}
 		} else {
 			log.Println("👋 Agent stopping gracefully.")
 			break
@@ -41,7 +67,7 @@ func main() {
 	}
 }
 
-func runAgentLoop(cfg config.AgentConfig, lxdClient *lxd.Client, interrupt chan os.Signal) error {
+func runAgentLoop(cfg config.AgentConfig, lxdClient *lxd.Client, interrupt chan os.Signal, lxdFailCount *int) error {
 	u, err := url.Parse(cfg.MasterURL)
 	if err != nil {
 		return fmt.Errorf("invalid master URL: %w", err)
@@ -60,6 +86,16 @@ func runAgentLoop(cfg config.AgentConfig, lxdClient *lxd.Client, interrupt chan 
 	}
 	defer conn.Close()
 
+	// Mutex to serialize WebSocket writes (prevent concurrent write panic)
+	var wsMu sync.Mutex
+
+	// Ping/Pong Read Deadline Keepalive Configuration (Read timeout 60s)
+	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
 	// 1. Send Register Message
 	regPayload, _ := json.Marshal(map[string]string{
 		"secret_token": cfg.AgentSecret,
@@ -72,13 +108,20 @@ func runAgentLoop(cfg config.AgentConfig, lxdClient *lxd.Client, interrupt chan 
 		NodeID:  cfg.NodeID,
 		Payload: regPayload,
 	}
-	if err := conn.WriteJSON(regMsg); err != nil {
+
+	wsMu.Lock()
+	err = conn.WriteJSON(regMsg)
+	wsMu.Unlock()
+	if err != nil {
 		return fmt.Errorf("failed to send register message: %w", err)
 	}
 
-	// 2. Start Telemetry Loop
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	// 2. Telemetry & Ping Ticker Setup
+	telemetryTicker := time.NewTicker(2 * time.Second)
+	defer telemetryTicker.Stop()
+
+	pingTicker := time.NewTicker(25 * time.Second)
+	defer pingTicker.Stop()
 
 	done := make(chan struct{})
 
@@ -91,15 +134,31 @@ func runAgentLoop(cfg config.AgentConfig, lxdClient *lxd.Client, interrupt chan 
 				log.Printf("WebSocket read error: %v", err)
 				return
 			}
-			handleMasterMessage(conn, lxdClient, msg)
+			// Reset read deadline on valid incoming RPC message
+			_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+			handleMasterMessage(conn, &wsMu, lxdClient, msg)
 		}
 	}()
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-telemetryTicker.C:
+			// LXD Watchdog & Self-Healing Check
 			hostStats := lxdClient.GetHostStats()
-			instances, _ := lxdClient.ListInstances()
+			instances, err := lxdClient.ListInstances()
+			if err != nil {
+				*lxdFailCount++
+				log.Printf("⚠️ [Watchdog] Failed to query local LXD daemon (%d/3): %v", *lxdFailCount, err)
+				
+				// Self-Healing Trigger: If LXD Socket fails 3 times in a row, auto-restart lxd service
+				if *lxdFailCount >= 3 {
+					log.Printf("🚨 [Self-Healing Watchdog] LXD daemon unresponsive for 3 cycles! Triggering auto-restart of lxd service...")
+					_ = exec.Command("systemctl", "restart", "lxd").Run()
+					*lxdFailCount = 0
+				}
+			} else {
+				*lxdFailCount = 0 // Reset counter on success
+			}
 
 			hb := ws.HeartbeatPayload{
 				HostStats: hostStats,
@@ -112,21 +171,36 @@ func runAgentLoop(cfg config.AgentConfig, lxdClient *lxd.Client, interrupt chan 
 				NodeID:  cfg.NodeID,
 				Payload: hbBytes,
 			}
-			if err := conn.WriteJSON(msg); err != nil {
-				return err
+
+			wsMu.Lock()
+			writeErr := conn.WriteJSON(msg)
+			wsMu.Unlock()
+			if writeErr != nil {
+				return writeErr
+			}
+
+		case <-pingTicker.C:
+			// Send WebSocket Ping control frame every 25 seconds
+			wsMu.Lock()
+			pingErr := conn.WriteMessage(websocket.PingMessage, nil)
+			wsMu.Unlock()
+			if pingErr != nil {
+				return pingErr
 			}
 
 		case <-done:
 			return fmt.Errorf("connection closed by server")
 
 		case <-interrupt:
+			wsMu.Lock()
 			_ = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			wsMu.Unlock()
 			return nil
 		}
 	}
 }
 
-func handleMasterMessage(conn *websocket.Conn, lxdClient *lxd.Client, msg ws.WSMessage) {
+func handleMasterMessage(conn *websocket.Conn, wsMu *sync.Mutex, lxdClient *lxd.Client, msg ws.WSMessage) {
 	if msg.Type == ws.MsgRPCReq {
 		var req ws.RPCReqPayload
 		_ = json.Unmarshal(msg.Payload, &req)
@@ -192,7 +266,9 @@ func handleMasterMessage(conn *websocket.Conn, lxdClient *lxd.Client, msg ws.WSM
 			respMsg.Payload = json.RawMessage(`{"status":"ok"}`)
 		}
 
+		wsMu.Lock()
 		_ = conn.WriteJSON(respMsg)
+		wsMu.Unlock()
 	}
 }
 
