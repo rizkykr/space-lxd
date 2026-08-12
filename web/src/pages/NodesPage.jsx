@@ -1,11 +1,43 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Card, Button, Badge } from '../components/ui/primitives';
-import { Plus, Layers } from 'lucide-react';
+import { Card, Button, Badge, Input } from '../components/ui/primitives';
+import { Plus, Layers, Edit2, Check, X, Loader2 } from 'lucide-react';
 
 export function NodesPage() {
-  const { nodes, onOpenAddNode } = useOutletContext();
+  const { nodes, fetchNodes, addToast, onOpenAddNode } = useOutletContext();
   const navigate = useNavigate();
+
+  const [editingNodeId, setEditingNodeId] = useState(null);
+  const [editingName, setEditingName] = useState('');
+  const [loadingNodeId, setLoadingNodeId] = useState(null);
+
+  const handleRenameNode = async (nodeId, e) => {
+    e.stopPropagation();
+    const trimmed = editingName.trim();
+    if (!trimmed) {
+      addToast('error', 'Nama node tidak boleh kosong');
+      return;
+    }
+    setLoadingNodeId(nodeId);
+    try {
+      const res = await fetch(`/api/nodes/${nodeId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rename_node', new_name: trimmed })
+      });
+      if (res.ok) {
+        addToast('success', `Nama node berhasil diperbarui menjadi '${trimmed}'`);
+        setEditingNodeId(null);
+        fetchNodes();
+      } else {
+        addToast('error', await res.text());
+      }
+    } catch (err) {
+      addToast('error', "Error: " + err.message);
+    } finally {
+      setLoadingNodeId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -26,15 +58,51 @@ export function NodesPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {nodes.map(node => {
           const lxdsCount = (node.lxds || node.instances || []).length;
+          const isEditing = editingNodeId === node.id;
+          const isLoading = loadingNodeId === node.id;
+
           return (
             <Card key={node.id} className="p-5 space-y-4 hover:border-primary/50 transition cursor-pointer" onClick={() => navigate(`/nodes/${node.id}`)}>
               <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`size-2.5 rounded-full ${node.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground'}`}></span>
-                    <h3 className="font-bold text-foreground text-base hover:underline">{node.name}</h3>
-                  </div>
-                  <p className="text-xs font-mono text-muted-foreground mt-1">IP: {node.ip || '127.0.0.1'}</p>
+                <div className="flex-1 mr-2" onClick={(e) => isEditing && e.stopPropagation()}>
+                  {isEditing ? (
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        className="h-7 text-xs font-bold w-36"
+                        autoFocus
+                      />
+                      <Button size="icon" className="size-7" onClick={(e) => handleRenameNode(node.id, e)} disabled={isLoading}>
+                        {isLoading ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+                      </Button>
+                      <Button variant="ghost" size="icon" className="size-7" onClick={(e) => { e.stopPropagation(); setEditingNodeId(null); }} disabled={isLoading}>
+                        <X className="size-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center gap-2 group">
+                        <span className={`size-2.5 rounded-full ${node.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground'}`}></span>
+                        <h3 className="font-bold text-foreground text-base hover:underline">{node.name}</h3>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-6 opacity-0 group-hover:opacity-100 transition text-muted-foreground hover:text-primary"
+                          title="Ubah Nama Node"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingNodeId(node.id);
+                            setEditingName(node.name);
+                          }}
+                        >
+                          <Edit2 className="size-3" />
+                        </Button>
+                      </div>
+                      <p className="text-xs font-mono text-muted-foreground mt-1">IP: {node.ip || '127.0.0.1'}</p>
+                    </div>
+                  )}
                 </div>
                 {node.is_master ? <Badge variant="info">MASTER</Badge> : <Badge variant="secondary">WORKER</Badge>}
               </div>
