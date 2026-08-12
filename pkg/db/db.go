@@ -273,12 +273,21 @@ func (db *DB) DeleteSSHKey(id int64) error {
 	return err
 }
 
+func (db *DB) UpdateNodeName(nodeID string, newName string) error {
+	_, err := db.Exec("UPDATE nodes SET name = ? WHERE id = ?", newName, newName)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("UPDATE nodes SET name = ? WHERE id = ?", newName, nodeID)
+	return err
+}
+
 func (db *DB) UpsertNode(node Node) error {
 	query := `
 	INSERT INTO nodes (id, name, ip, status, os_name, kernel, uptime, load_avg, cpu_cores, cpu_usage_pct, ram_total_mb, ram_used_mb, storage_total_gb, storage_used_gb, storage_usage_pct, secret_token, is_master, last_seen, created_at)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	ON CONFLICT(id) DO UPDATE SET
-		name=excluded.name,
+		name=CASE WHEN nodes.name != '' AND nodes.name != nodes.id THEN nodes.name ELSE excluded.name END,
 		ip=excluded.ip,
 		status=excluded.status,
 		os_name=excluded.os_name,

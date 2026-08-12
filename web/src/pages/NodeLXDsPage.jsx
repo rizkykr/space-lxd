@@ -4,7 +4,7 @@ import { Card, Button, Badge, Input } from '../components/ui/primitives';
 import { TerminalModal } from '../components/modals/TerminalModal';
 import { NodeHostTerminal } from '../components/terminal/NodeHostTerminal';
 import { ConfirmDialog } from '../components/modals/ConfirmDialog';
-import { Plus, ChevronRight, Layers, Sliders, Terminal, Square, Play, Trash2, Loader2, Server } from 'lucide-react';
+import { Plus, ChevronRight, Layers, Sliders, Terminal, Square, Play, Trash2, Loader2, Server, Edit2, Check, X } from 'lucide-react';
 
 export function NodeLXDsPage() {
   const { nodeId } = useParams();
@@ -16,8 +16,40 @@ export function NodeLXDsPage() {
   const [loadingAction, setLoadingAction] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
+  // Node Rename State
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nodeNewName, setNodeNewName] = useState('');
+  const [renamingLoading, setRenamingLoading] = useState(false);
+
   const targetNode = nodes.find(n => n.id === nodeId) || nodes[0];
   const nodeLXDs = targetNode?.lxds || targetNode?.instances || [];
+
+  const handleRenameNode = async () => {
+    const trimmed = nodeNewName.trim();
+    if (!trimmed) {
+      addToast('error', 'Nama node tidak boleh kosong');
+      return;
+    }
+    setRenamingLoading(true);
+    try {
+      const res = await fetch(`/api/nodes/${nodeId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rename_node', new_name: trimmed })
+      });
+      if (res.ok) {
+        addToast('success', `Nama node berhasil diperbarui menjadi '${trimmed}'`);
+        setIsEditingName(false);
+        fetchNodes();
+      } else {
+        addToast('error', await res.text());
+      }
+    } catch (e) {
+      addToast('error', "Error: " + e.message);
+    } finally {
+      setRenamingLoading(false);
+    }
+  };
 
   const filteredLXDs = nodeLXDs.filter(item => {
     return item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -67,7 +99,31 @@ export function NodeLXDsPage() {
             <span className="text-foreground font-bold">{targetNode?.name || nodeId}</span>
           </div>
           <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
-            <span>Node: {targetNode?.name || nodeId}</span>
+            {isEditingName ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  value={nodeNewName}
+                  onChange={(e) => setNodeNewName(e.target.value)}
+                  placeholder="Nama Node Baru..."
+                  className="h-8 text-sm font-bold w-56"
+                  autoFocus
+                />
+                <Button size="sm" onClick={handleRenameNode} disabled={renamingLoading} className="h-8 px-2.5">
+                  {renamingLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setIsEditingName(false)} disabled={renamingLoading} className="h-8 px-2.5">
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span>Node: {targetNode?.name || nodeId}</span>
+                <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-primary" title="Ubah Nama Display Node" onClick={() => { setNodeNewName(targetNode?.name || ''); setIsEditingName(true); }}>
+                  <Edit2 className="size-3.5" />
+                </Button>
+              </div>
+            )}
             {targetNode?.is_master ? <Badge variant="info">MASTER NODE</Badge> : <Badge variant="secondary">WORKER NODE</Badge>}
             <Badge variant={targetNode?.status === 'online' ? 'success' : 'secondary'}>
               {targetNode?.status?.toUpperCase() || 'ONLINE'}

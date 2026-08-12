@@ -413,15 +413,16 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) < 4 || parts[3] != "action" {
+	if len(parts) < 3 {
 		http.Error(w, "Invalid endpoint", http.StatusBadRequest)
 		return
 	}
 	nodeID := parts[2]
 
 	var req struct {
-		Action         string `json:"action"` // start, stop, delete, launch, etc.
+		Action         string `json:"action"` // start, stop, delete, launch, rename_node, etc.
 		Name           string `json:"name"`
+		NewName        string `json:"new_name"`
 		Image          string `json:"image"`
 		Type           string `json:"type"`
 		RAMGB          int    `json:"ram_gb"`
@@ -441,6 +442,21 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("🎮 Action '%s' requested for LXD '%s' on Node '%s'", req.Action, req.Name, nodeID)
+
+	if req.Action == "rename_node" {
+		newName := strings.TrimSpace(req.NewName)
+		if newName == "" {
+			http.Error(w, "Nama baru tidak boleh kosong", http.StatusBadRequest)
+			return
+		}
+		if err := s.db.UpdateNodeName(nodeID, newName); err != nil {
+			http.Error(w, "Gagal mengubah nama node: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "Nama node berhasil diperbarui"})
+		return
+	}
 
 	if nodeID == "local-master" {
 		lxdClient := lxd.NewClient(s.cfg.LXDSocket)
