@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Badge } from '../ui/primitives';
-import { Plus, Server, LogOut, RefreshCw, ArrowUpCircle, CheckCircle2, Loader2, X, Globe } from 'lucide-react';
+import { LogOut, RefreshCw, ArrowUpCircle, CheckCircle2, Loader2, X, Sun, Moon, Monitor } from 'lucide-react';
 import { useI18n } from '../../i18n';
+import { useTheme } from '../../theme';
 
-export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD, onLogout, onRefresh }) {
-  const { lang, setLanguage, t } = useI18n();
+export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh }) {
+  const { t } = useI18n();
+  const { theme, setTheme } = useTheme();
   const [versionInfo, setVersionInfo] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -96,53 +98,59 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
           )}
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {/* Language Switcher */}
-          <div className="flex items-center gap-1 bg-secondary/60 p-1 rounded-lg border border-border">
-            <Globe className="size-3 text-muted-foreground ml-1" />
+        <div className="flex items-center gap-3">
+          {/* Theme Switcher: System | Dark | Light */}
+          <div className="flex items-center bg-secondary/60 p-1 rounded-lg border border-border" title={t('theme.switch')}>
             <button
               type="button"
-              onClick={() => setLanguage('en')}
-              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
-                lang === 'en'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
+              onClick={() => setTheme('system')}
+              title={t('theme.system')}
+              className={`px-2 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+                theme === 'system'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              EN
+              <Monitor className="size-3.5" />
+              <span className="hidden sm:inline text-[10px]">Auto</span>
             </button>
             <button
               type="button"
-              onClick={() => setLanguage('id')}
-              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
-                lang === 'id'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
+              onClick={() => setTheme('dark')}
+              title={t('theme.dark')}
+              className={`px-2 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+                theme === 'dark'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              ID
+              <Moon className="size-3.5" />
+              <span className="hidden sm:inline text-[10px]">Dark</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme('light')}
+              title={t('theme.light')}
+              className={`px-2 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+                theme === 'light'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Sun className="size-3.5" />
+              <span className="hidden sm:inline text-[10px]">Light</span>
             </button>
           </div>
 
-          <Button variant="outline" size="sm" onClick={onRefresh} title={t('header.refresh')}>
+          <Button variant="outline" size="icon" className="size-8" onClick={onRefresh} title={t('header.refresh')}>
             <RefreshCw className="size-3.5 text-muted-foreground" />
           </Button>
 
-          <Button variant="outline" size="sm" onClick={onOpenAddNode}>
-            <Server className="size-3.5 text-cyan-400" />
-            <span>{t('header.addNode')}</span>
-          </Button>
-
-          <Button variant="default" size="sm" onClick={onOpenCreateLXD}>
-            <Plus className="size-3.5" />
-            <span>{t('header.createLxd')}</span>
-          </Button>
-
-          <div className="h-4 w-px bg-border mx-1"></div>
+          <div className="h-4 w-px bg-border mx-0.5"></div>
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono text-foreground font-bold">{user?.username || 'admin'}</span>
-            <Button variant="ghost" size="icon" onClick={onLogout} title={t('header.logout')}>
+            <Button variant="ghost" size="icon" className="size-8" onClick={onLogout} title={t('header.logout')}>
               <LogOut className="size-4 text-destructive" />
             </Button>
           </div>

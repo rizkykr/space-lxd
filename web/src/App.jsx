@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { useI18n } from './i18n';
+import { useTheme } from './theme';
 
 // Layout (static, needed for routing shell)
 import { ProtectedLayout } from './components/layout/ProtectedLayout';
@@ -33,6 +34,7 @@ function PageLoader() {
 // ── APP ROOT ROUTER ────────────────────────────────────────────────────────────
 export default function App() {
   const { setLanguage } = useI18n();
+  const { setTheme } = useTheme();
   const [setupRequired, setSetupRequired] = useState(false);
   const [token, setToken] = useState(localStorage.getItem('lxd_token') || '');
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('lxd_user') || 'null'));
@@ -46,10 +48,13 @@ export default function App() {
         if (data.language && !localStorage.getItem('lxd_lang')) {
           setLanguage(data.language);
         }
+        if (data.theme && !localStorage.getItem('lxd_theme')) {
+          setTheme(data.theme);
+        }
       })
       .catch(console.error)
       .finally(() => setAuthLoading(false));
-  }, [setLanguage]);
+  }, [setLanguage, setTheme]);
 
   const handleLoginSuccess = (newToken, newUser) => {
     setSetupRequired(false);

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Card, Button, Input } from '../components/ui/primitives';
 import { useI18n } from '../i18n';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { useTheme } from '../theme';
+import { AlertCircle, Loader2, Globe, Sun, Moon, Monitor } from 'lucide-react';
 
 export function LoginPage({ onLoginSuccess }) {
   const { lang, setLanguage, t } = useI18n();
+  const { theme, setTheme } = useTheme();
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,30 +38,71 @@ export function LoginPage({ onLoginSuccess }) {
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
       <Card className="max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl border-border relative">
-        {/* Language switcher top right */}
-        <div className="absolute top-4 right-4 flex items-center gap-1 bg-secondary/50 p-1 rounded-lg border border-border">
-          <button
-            type="button"
-            onClick={() => setLanguage('en')}
-            className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
-              lang === 'en'
-                ? 'bg-primary text-primary-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            EN
-          </button>
-          <button
-            type="button"
-            onClick={() => setLanguage('id')}
-            className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
-              lang === 'id'
-                ? 'bg-primary text-primary-foreground shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            ID
-          </button>
+        {/* Language & Theme switcher top right */}
+        <div className="absolute top-4 right-4 flex items-center gap-1.5">
+          <div className="flex items-center gap-1 bg-secondary/50 p-1 rounded-lg border border-border">
+            <button
+              type="button"
+              onClick={() => setLanguage('en')}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                lang === 'en'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => setLanguage('id')}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                lang === 'id'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              ID
+            </button>
+          </div>
+
+          <div className="flex items-center bg-secondary/50 p-1 rounded-lg border border-border">
+            <button
+              type="button"
+              onClick={() => setTheme('system')}
+              title={t('theme.system')}
+              className={`px-1.5 py-0.5 rounded text-[10px] transition-all flex items-center justify-center ${
+                theme === 'system'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Monitor className="size-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme('dark')}
+              title={t('theme.dark')}
+              className={`px-1.5 py-0.5 rounded text-[10px] transition-all flex items-center justify-center ${
+                theme === 'dark'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Moon className="size-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme('light')}
+              title={t('theme.light')}
+              className={`px-1.5 py-0.5 rounded text-[10px] transition-all flex items-center justify-center ${
+                theme === 'light'
+                  ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Sun className="size-3" />
+            </button>
+          </div>
         </div>
 
         <div className="text-center space-y-2 pt-2">

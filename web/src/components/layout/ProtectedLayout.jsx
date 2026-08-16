@@ -107,8 +107,6 @@ export function ProtectedLayout({ user, onLogout }) {
         <TopHeader
           user={user}
           nodesCount={nodes.length}
-          onOpenAddNode={handleOpenAddNode}
-          onOpenCreateLXD={() => setShowCreateLXDModal(true)}
           onLogout={onLogout}
           onRefresh={fetchNodes}
         />

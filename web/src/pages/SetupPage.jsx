@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button, Input, Select, Badge } from '../components/ui/primitives';
 import { useI18n } from '../i18n';
+import { useTheme } from '../theme';
 import {
   Globe,
   User,
@@ -14,7 +15,11 @@ import {
   ArrowRight,
   ArrowLeft,
   ShieldCheck,
-  Check
+  Check,
+  Palette,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 
 const TIMEZONE_OPTIONS = [
@@ -32,6 +37,7 @@ const TIMEZONE_OPTIONS = [
 export function SetupPage({ onSetupComplete }) {
   const navigate = useNavigate();
   const { lang, setLanguage, t } = useI18n();
+  const { theme, setTheme } = useTheme();
 
   const [step, setStep] = useState(1);
   const totalSteps = 6;
@@ -42,6 +48,7 @@ export function SetupPage({ onSetupComplete }) {
     confirmPassword: '',
     master_public: window.location.origin,
     language: lang || 'en',
+    theme: theme || 'system',
     timezone: 'Asia/Jakarta',
     default_ram_gb: '2',
     default_cpu_cores: '2',
@@ -57,6 +64,11 @@ export function SetupPage({ onSetupComplete }) {
   const handleLanguageChange = (newLang) => {
     setLanguage(newLang);
     setForm((prev) => ({ ...prev, language: newLang }));
+  };
+
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+    setForm((prev) => ({ ...prev, theme: newTheme }));
   };
 
   const validateStep = () => {
@@ -113,6 +125,7 @@ export function SetupPage({ onSetupComplete }) {
         password: form.password,
         master_public: form.master_public.trim().replace(/\/$/, ''),
         language: form.language || lang,
+        theme: form.theme || theme,
         timezone: form.timezone,
         default_ram_gb: form.default_ram_gb,
         default_cpu_cores: form.default_cpu_cores,
@@ -171,62 +184,103 @@ export function SetupPage({ onSetupComplete }) {
             </div>
           </div>
 
-          {/* Language Quick Switcher */}
-          <div className="flex items-center gap-1.5 self-start sm:self-center bg-secondary/50 p-1 rounded-lg border border-border">
-            <button
-              type="button"
-              onClick={() => handleLanguageChange('en')}
-              className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                lang === 'en'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              onClick={() => handleLanguageChange('id')}
-              className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                lang === 'id'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              ID
-            </button>
+          {/* Language & Theme Quick Switcher */}
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            <div className="flex items-center gap-1 bg-secondary/50 p-1 rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('en')}
+                className={`px-2.5 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                  lang === 'en'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLanguageChange('id')}
+                className={`px-2.5 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                  lang === 'id'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                ID
+              </button>
+            </div>
+
+            <div className="flex items-center bg-secondary/50 p-1 rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => handleThemeChange('system')}
+                title={t('theme.system')}
+                className={`px-1.5 py-0.5 rounded text-[10px] transition-all flex items-center justify-center ${
+                  theme === 'system'
+                    ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Monitor className="size-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleThemeChange('dark')}
+                title={t('theme.dark')}
+                className={`px-1.5 py-0.5 rounded text-[10px] transition-all flex items-center justify-center ${
+                  theme === 'dark'
+                    ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Moon className="size-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleThemeChange('light')}
+                title={t('theme.light')}
+                className={`px-1.5 py-0.5 rounded text-[10px] transition-all flex items-center justify-center ${
+                  theme === 'light'
+                    ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Sun className="size-3" />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Stepper Progress Bar */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs font-mono">
-            <span className="text-primary font-semibold">
-              {t('setup.stepOf', {
-                current: step,
-                total: totalSteps,
-                title: stepTitles[step - 1]
-              })}
+            <span className="text-primary font-bold">
+              {t('setup.stepIndicator', { current: step, total: totalSteps })}
             </span>
-            <span className="text-muted-foreground">{Math.round((step / totalSteps) * 100)}%</span>
+            <span className="text-muted-foreground">{stepTitles[step - 1]}</span>
           </div>
 
-          <div className="w-full bg-secondary h-2 rounded-full overflow-hidden border border-border">
-            <div
-              className="bg-primary h-full transition-all duration-300 ease-out rounded-full"
-              style={{ width: `${(step / totalSteps) * 100}%` }}
-            />
+          <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden flex">
+            {Array.from({ length: totalSteps }).map((_, i) => (
+              <div
+                key={i}
+                className={`h-full flex-1 transition-all duration-300 ${
+                  i + 1 <= step ? 'bg-primary' : 'bg-transparent'
+                }`}
+              />
+            ))}
           </div>
 
-          {/* Stepper Indicators */}
-          <div className="grid grid-cols-6 gap-1 pt-1">
-            {stepTitles.map((title, idx) => {
-              const stepNum = idx + 1;
+          <div className="grid grid-cols-6 gap-1 pt-1 font-mono">
+            {stepTitles.map((title, i) => {
+              const stepNum = i + 1;
               const isCompleted = stepNum < step;
               const isCurrent = stepNum === step;
+
               return (
                 <button
-                  key={idx}
+                  key={i}
                   type="button"
                   onClick={() => {
                     if (stepNum < step) setStep(stepNum);
@@ -265,9 +319,9 @@ export function SetupPage({ onSetupComplete }) {
 
         {/* Step Content */}
         <div className="min-h-[220px] flex flex-col justify-center">
-          {/* STEP 1: LANGUAGE */}
+          {/* STEP 1: LANGUAGE & THEME */}
           {step === 1 && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="space-y-1">
                 <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
                   <Globe className="size-4 text-primary" />
@@ -276,7 +330,7 @@ export function SetupPage({ onSetupComplete }) {
                 <p className="text-xs text-muted-foreground">{t('setup.language.desc')}</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => handleLanguageChange('en')}
@@ -320,6 +374,54 @@ export function SetupPage({ onSetupComplete }) {
                   {lang === 'id' && <Check className="size-5 text-primary shrink-0" />}
                 </button>
               </div>
+
+              {/* Theme Selector in Step 1 */}
+              <div className="space-y-2 pt-2 border-t border-border/50">
+                <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                  <Palette className="size-3.5 text-purple-400" />
+                  <span>{t('theme.title')}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleThemeChange('system')}
+                    className={`p-2.5 rounded-lg border text-center transition-all flex flex-col items-center gap-1.5 ${
+                      theme === 'system'
+                        ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                        : 'bg-card border-border hover:bg-accent/50'
+                    }`}
+                  >
+                    <Monitor className="size-4 text-primary" />
+                    <span className="text-[11px] font-bold text-foreground">{t('theme.system')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleThemeChange('dark')}
+                    className={`p-2.5 rounded-lg border text-center transition-all flex flex-col items-center gap-1.5 ${
+                      theme === 'dark'
+                        ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                        : 'bg-card border-border hover:bg-accent/50'
+                    }`}
+                  >
+                    <Moon className="size-4 text-yellow-400" />
+                    <span className="text-[11px] font-bold text-foreground">{t('theme.dark')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleThemeChange('light')}
+                    className={`p-2.5 rounded-lg border text-center transition-all flex flex-col items-center gap-1.5 ${
+                      theme === 'light'
+                        ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                        : 'bg-card border-border hover:bg-accent/50'
+                    }`}
+                  >
+                    <Sun className="size-4 text-amber-500" />
+                    <span className="text-[11px] font-bold text-foreground">{t('theme.light')}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -343,7 +445,7 @@ export function SetupPage({ onSetupComplete }) {
                     type="text"
                     value={form.username}
                     onChange={(e) => setForm({ ...form, username: e.target.value })}
-                    placeholder={t('setup.account.usernamePlaceholder')}
+                    placeholder="admin"
                     required
                   />
                 </div>
@@ -361,7 +463,7 @@ export function SetupPage({ onSetupComplete }) {
                 </div>
                 <div>
                   <label className="block text-foreground font-medium mb-1">
-                    {t('setup.account.confirm')}
+                    {t('setup.account.confirmPassword')}
                   </label>
                   <Input
                     type="password"
@@ -375,7 +477,7 @@ export function SetupPage({ onSetupComplete }) {
             </div>
           )}
 
-          {/* STEP 3: MASTER ENDPOINT */}
+          {/* STEP 3: MASTER PUBLIC ENDPOINT */}
           {step === 3 && (
             <div className="space-y-4">
               <div className="space-y-1">
@@ -392,33 +494,33 @@ export function SetupPage({ onSetupComplete }) {
                     {t('setup.endpoint.url')}
                   </label>
                   <Input
-                    type="text"
+                    type="url"
                     value={form.master_public}
                     onChange={(e) => setForm({ ...form, master_public: e.target.value })}
-                    placeholder={t('setup.endpoint.placeholder')}
+                    placeholder="http://192.168.1.100:9090 or https://lxd.domain.com"
                     required
                   />
                   <p className="text-[11px] text-muted-foreground mt-1 font-sans">
-                    {t('setup.endpoint.note')}
+                    {t('setup.endpoint.urlHelp')}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 pt-1 font-sans">
+                <div className="pt-1">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="text-xs"
                     onClick={() => setForm({ ...form, master_public: currentOrigin })}
+                    className="text-xs"
                   >
-                    {t('setup.endpoint.useCurrent', { url: currentOrigin })}
+                    {t('setup.endpoint.useCurrent')} ({currentOrigin})
                   </Button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* STEP 4: TIMEZONE */}
+          {/* STEP 4: GLOBAL TIMEZONE */}
           {step === 4 && (
             <div className="space-y-4">
               <div className="space-y-1">
@@ -432,19 +534,27 @@ export function SetupPage({ onSetupComplete }) {
               <div className="space-y-3 font-mono text-xs pt-2">
                 <div>
                   <label className="block text-foreground font-medium mb-1">
-                    {t('setup.timezone.label')}
+                    {t('setup.timezone.select')}
                   </label>
                   <Select
                     value={form.timezone}
                     onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-                    options={TIMEZONE_OPTIONS}
-                  />
+                  >
+                    {TIMEZONE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1 font-sans">
+                    {t('setup.timezone.note')}
+                  </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* STEP 5: DEFAULT RESOURCES */}
+          {/* STEP 5: DEFAULT LXD RESOURCES */}
           {step === 5 && (
             <div className="space-y-4">
               <div className="space-y-1">
@@ -513,6 +623,10 @@ export function SetupPage({ onSetupComplete }) {
                   <span className="font-semibold text-foreground uppercase">{form.language}</span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">{t('theme.title')}:</span>
+                  <span className="font-semibold text-foreground uppercase">{form.theme || theme}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-border/50">
                   <span className="text-muted-foreground">{t('setup.review.admin')}:</span>
                   <span className="font-semibold text-foreground">{form.username}</span>
                 </div>
@@ -570,13 +684,13 @@ export function SetupPage({ onSetupComplete }) {
             >
               {loading ? (
                 <>
-                  <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                  <span>{t('setup.review.creating')}</span>
+                  <Loader2 className="size-4 animate-spin mr-2" />
+                  <span>{t('setup.finishing')}</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="size-3.5 mr-1.5" />
-                  <span>{t('setup.review.finish')}</span>
+                  <Check className="size-4 mr-2" />
+                  <span>{t('setup.finishBtn')}</span>
                 </>
               )}
             </Button>

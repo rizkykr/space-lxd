@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Card, Button, Badge, Select, Input } from '../components/ui/primitives';
-import { Globe, Sliders, Server, Save, AlertTriangle, CheckCircle2, Languages } from 'lucide-react';
+import { Globe, Sliders, Server, Save, AlertTriangle, CheckCircle2, Languages, Palette, Sun, Moon, Monitor } from 'lucide-react';
 import { useI18n } from '../i18n';
+import { useTheme } from '../theme';
 
 export function SettingsPage() {
   const { addToast } = useOutletContext();
   const { lang, setLanguage, t } = useI18n();
+  const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('system');
   const [loading, setLoading] = useState(false);
 
@@ -16,7 +18,8 @@ export function SettingsPage() {
     default_ram_gb: '2',
     default_cpu_cores: '2',
     default_disk_gb: '20',
-    language: lang || 'en'
+    language: lang || 'en',
+    theme: theme || 'system'
   });
 
   const fetchSettings = async () => {
@@ -28,10 +31,14 @@ export function SettingsPage() {
           ...prev,
           ...data,
           master_public_url: data.master_public_url || window.location.origin,
-          language: data.language || lang || 'en'
+          language: data.language || lang || 'en',
+          theme: data.theme || theme || 'system'
         }));
         if (data.language && data.language !== lang) {
           setLanguage(data.language);
+        }
+        if (data.theme && data.theme !== theme) {
+          setTheme(data.theme);
         }
       }
     } catch (e) {
@@ -60,6 +67,9 @@ export function SettingsPage() {
         addToast('success', t('settings.saved'));
         if (settings.language && settings.language !== lang) {
           setLanguage(settings.language);
+        }
+        if (settings.theme && settings.theme !== theme) {
+          setTheme(settings.theme);
         }
         fetchSettings();
       } else {
@@ -167,6 +177,18 @@ export function SettingsPage() {
           >
             <Languages className="size-4 shrink-0 text-emerald-400" />
             <span>{t('settings.languageTitle')}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('theme')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-all ${
+              activeTab === 'theme'
+                ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+            }`}
+          >
+            <Palette className="size-4 shrink-0 text-purple-400" />
+            <span>{t('theme.title')}</span>
           </button>
         </Card>
 
@@ -410,6 +432,99 @@ export function SettingsPage() {
                       </div>
                     </div>
                     {(settings.language || lang) === 'id' && <Badge variant="info">Active</Badge>}
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <Button type="submit" disabled={loading}>
+                    <Save className="size-4 mr-1.5" />
+                    <span>{t('common.save')}</span>
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          )}
+
+          {/* TAB 5: THEME & APPEARANCE */}
+          {activeTab === 'theme' && (
+            <Card className="p-6 space-y-5">
+              <div className="border-b border-border pb-4">
+                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Palette className="size-5 text-purple-400" />
+                  <span>{t('theme.title')}</span>
+                </h2>
+                <p className="text-xs text-muted-foreground">{t('theme.systemDesc')}</p>
+              </div>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4 text-xs font-sans max-w-md">
+                <div className="space-y-3">
+                  <div
+                    onClick={() => {
+                      setSettings({ ...settings, theme: 'system' });
+                      setTheme('system');
+                    }}
+                    className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                      (settings.theme || theme) === 'system'
+                        ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary'
+                        : 'border-border bg-background hover:bg-accent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="size-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                        <Monitor className="size-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-foreground">{t('theme.system')}</div>
+                        <div className="text-[11px] text-muted-foreground">{t('theme.systemDesc')}</div>
+                      </div>
+                    </div>
+                    {(settings.theme || theme) === 'system' && <Badge variant="info">Active</Badge>}
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setSettings({ ...settings, theme: 'dark' });
+                      setTheme('dark');
+                    }}
+                    className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                      (settings.theme || theme) === 'dark'
+                        ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary'
+                        : 'border-border bg-background hover:bg-accent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="size-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-yellow-400">
+                        <Moon className="size-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-foreground">{t('theme.dark')}</div>
+                        <div className="text-[11px] text-muted-foreground">{t('theme.darkDesc')}</div>
+                      </div>
+                    </div>
+                    {(settings.theme || theme) === 'dark' && <Badge variant="info">Active</Badge>}
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setSettings({ ...settings, theme: 'light' });
+                      setTheme('light');
+                    }}
+                    className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                      (settings.theme || theme) === 'light'
+                        ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary'
+                        : 'border-border bg-background hover:bg-accent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="size-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500">
+                        <Sun className="size-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-foreground">{t('theme.light')}</div>
+                        <div className="text-[11px] text-muted-foreground">{t('theme.lightDesc')}</div>
+                      </div>
+                    </div>
+                    {(settings.theme || theme) === 'light' && <Badge variant="info">Active</Badge>}
                   </div>
                 </div>
 

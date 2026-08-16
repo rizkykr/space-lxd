@@ -251,11 +251,13 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	hasAdmin := s.db.HasUsers()
 	masterPub := s.db.GetSetting("master_public_url", s.cfg.MasterPublic)
 	lang := s.db.GetSetting("language", "en")
+	theme := s.db.GetSetting("theme", "system")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"setup_completed": hasAdmin,
 		"master_public":   masterPub,
 		"language":        lang,
+		"theme":           theme,
 	})
 }
 
@@ -269,6 +271,7 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 		Password     string `json:"password"`
 		MasterPublic string `json:"master_public"`
 		Language     string `json:"language"`
+		Theme        string `json:"theme"`
 		Timezone     string `json:"timezone"`
 		DefaultRAM   string `json:"default_ram_gb"`
 		DefaultCPU   string `json:"default_cpu_cores"`
@@ -292,6 +295,9 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 	// Persist optional initial configuration chosen during the setup wizard
 	if req.Language != "" {
 		_ = s.db.SetSetting("language", req.Language)
+	}
+	if req.Theme != "" {
+		_ = s.db.SetSetting("theme", req.Theme)
 	}
 	if req.Timezone != "" {
 		_ = s.db.SetSetting("global_timezone", req.Timezone)
@@ -1505,6 +1511,9 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, exists := settings["language"]; !exists {
 			settings["language"] = "en"
+		}
+		if _, exists := settings["theme"]; !exists {
+			settings["theme"] = "system"
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(settings)

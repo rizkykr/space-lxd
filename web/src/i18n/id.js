@@ -495,4 +495,14 @@ export const id = {
   'tpl.nodejsDesc': 'Node.js 22 LTS & PM2 Process Manager',
   'tpl.python': 'Python 3 Environment',
   'tpl.pythonDesc': 'Python 3, virtualenv, & pip package manager',
+
+  // Theme & Appearance
+  'theme.title': 'Tema & Tampilan',
+  'theme.system': 'Ikuti Sistem (Default)',
+  'theme.dark': 'Mode Gelap (Dark)',
+  'theme.light': 'Mode Terang (Light)',
+  'theme.systemDesc': 'Otomatis mengikuti preferensi tema sistem operasi Anda',
+  'theme.darkDesc': 'Tema obsidian gelap yang nyaman di mata',
+  'theme.lightDesc': 'Tema putih terang yang bersih dan jelas',
+  'theme.switch': 'Ganti Tema',
 };

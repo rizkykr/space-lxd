@@ -495,4 +495,14 @@ export const en = {
   'tpl.nodejsDesc': 'Node.js 22 LTS & PM2 Process Manager',
   'tpl.python': 'Python 3 Environment',
   'tpl.pythonDesc': 'Python 3, virtualenv, & pip package manager',
+
+  // Theme & Appearance
+  'theme.title': 'Theme & Appearance',
+  'theme.system': 'System (Default)',
+  'theme.dark': 'Dark Mode',
+  'theme.light': 'Light Mode',
+  'theme.systemDesc': 'Automatically match your operating system theme preference',
+  'theme.darkDesc': 'Deep dark obsidian theme for low light environments',
+  'theme.lightDesc': 'Clean, crisp light theme with high contrast',
+  'theme.switch': 'Switch Theme',
 };
