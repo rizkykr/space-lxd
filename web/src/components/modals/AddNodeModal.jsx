@@ -1,38 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Input } from '../ui/primitives';
 import { Server, X, Copy, Check, Sparkles } from 'lucide-react';
 import { useI18n } from '../../i18n';
 
-export function AddNodeModal({ joinTokenData, onClose, onRefreshNodes }) {
+export function AddNodeModal({ joinTokenData, nodes, onClose }) {
   const { t } = useI18n();
   const [nodeNameInput, setNodeNameInput] = useState('');
   const [copied, setCopied] = useState(false);
-  const [initialNodesCount, setInitialNodesCount] = useState(0);
   const [detectedNode, setDetectedNode] = useState(null);
+  const knownIds = useRef(null);
 
-  // Realtime Polling Detection: if a new node joins while modal is open
+  // Realtime detection via the dashboard WebSocket snapshot (no polling):
+  // when a new node appears in `nodes`, flag it as joined.
   useEffect(() => {
-    let interval;
-    const checkNewNodes = async () => {
-      try {
-        const res = await fetch('/api/nodes');
-        if (res.ok) {
-          const list = await res.json();
-          if (initialNodesCount > 0 && list.length > initialNodesCount) {
-            const newlyAdded = list[list.length - 1];
-            setDetectedNode(newlyAdded);
-            if (onRefreshNodes) onRefreshNodes();
-          } else if (initialNodesCount === 0) {
-            setInitialNodesCount(list.length);
-          }
-        }
-      } catch (e) {}
-    };
-
-    checkNewNodes();
-    interval = setInterval(checkNewNodes, 2500);
-    return () => clearInterval(interval);
-  }, [initialNodesCount, onRefreshNodes]);
+    if (knownIds.current === null) {
+      knownIds.current = new Set((nodes || []).map(n => n.id));
+      return;
+    }
+    const newly = (nodes || []).find(n => !knownIds.current.has(n.id));
+    if (newly) {
+      knownIds.current.add(newly.id);
+      setDetectedNode(newly);
+    }
+  }, [nodes]);
 
   const rawCmd = joinTokenData?.join_command || '';
   

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '../../i18n';
 
-export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
+export function CreateLXDModal({ nodes, onClose, addToast }) {
   const navigate = useNavigate();
   const { t } = useI18n();
   const [step, setStep] = useState(1);
@@ -157,7 +157,6 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
             template_preset: form.template_preset,
             ssh_key: !!form.ssh_key
           });
-          onRefresh();
         }, 1000);
       } else {
         addToast('error', t('wizard.deployFailed'));

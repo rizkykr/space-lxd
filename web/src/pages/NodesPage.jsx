@@ -5,7 +5,7 @@ import { Plus, Layers, Edit2, Check, X, Loader2 } from 'lucide-react';
 import { useI18n } from '../i18n';
 
 export function NodesPage() {
-  const { nodes, fetchNodes, addToast, onOpenAddNode } = useOutletContext();
+  const { nodes, addToast, onOpenAddNode } = useOutletContext();
   const navigate = useNavigate();
   const { t } = useI18n();
 
@@ -30,7 +30,6 @@ export function NodesPage() {
       if (res.ok) {
         addToast('success', t('nodes.renameSuccess', { name: trimmed }));
         setEditingNodeId(null);
-        fetchNodes();
       } else {
         addToast('error', await res.text());
       }

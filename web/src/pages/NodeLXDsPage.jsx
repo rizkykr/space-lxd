@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { Card, Button, Badge, Input } from '../components/ui/primitives';
 import { TerminalModal } from '../components/modals/TerminalModal';
 import { NodeHostTerminal } from '../components/terminal/NodeHostTerminal';
 import { ConfirmDialog } from '../components/modals/ConfirmDialog';
-import { Plus, ChevronRight, Layers, Sliders, Terminal, Square, Play, Trash2, Loader2, Server, Edit2, Check, X } from 'lucide-react';
+import { Plus, ChevronRight, Layers, Sliders, Terminal, Square, Play, Trash2, Loader2, Server, Edit2, Check, X, Cpu, MemoryStick, HardDrive, Network, Gauge, Activity, RefreshCw, Zap } from 'lucide-react';
 import { useI18n } from '../i18n';
 
 export function NodeLXDsPage() {
   const { nodeId } = useParams();
   const navigate = useNavigate();
-  const { nodes, fetchNodes, addToast, onOpenCreateLXD } = useOutletContext();
+  const { nodes, addToast, onOpenCreateLXD } = useOutletContext();
   const { t } = useI18n();
 
   const [activeTab, setActiveTab] = useState('containers');
@@ -43,7 +43,6 @@ export function NodeLXDsPage() {
       if (res.ok) {
         addToast('success', t('nodes.renameSuccess', { name: trimmed }));
         setIsEditingName(false);
-        fetchNodes();
       } else {
         addToast('error', await res.text());
       }
@@ -69,7 +68,6 @@ export function NodeLXDsPage() {
       });
       if (res.ok) {
         addToast('success', t('node.actionDone', { name: lxdName, action }));
-        fetchNodes();
       } else {
         addToast('error', await res.text());
       }
@@ -101,7 +99,6 @@ export function NodeLXDsPage() {
       });
       if (res.ok) {
         addToast('success', t('node.deleteNodeSuccess', { name: targetNode?.name || nodeId }));
-        fetchNodes();
         navigate('/nodes');
       } else {
         addToast('error', await res.text());
@@ -130,6 +127,64 @@ export function NodeLXDsPage() {
   const [customDomainInput, setCustomDomainInput] = useState('');
   const [domainLoading, setDomainLoading] = useState(false);
 
+  // Hardware & Benchmark State
+  const [hardware, setHardware] = useState(null);
+  const [benchmark, setBenchmark] = useState(null);
+  const [loadingHardware, setLoadingHardware] = useState(false);
+  const [loadingBenchmark, setLoadingBenchmark] = useState(false);
+
+  const postAction = async (action) => {
+    const res = await fetch(`/api/nodes/${nodeId}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  };
+
+  const loadHardware = async () => {
+    setLoadingHardware(true);
+    try {
+      setHardware(await postAction('get_hardware'));
+    } catch (e) {
+      addToast('error', `${t('bench.hardwareError')}: ${e.message}`);
+    } finally {
+      setLoadingHardware(false);
+    }
+  };
+
+  const runBenchmark = async () => {
+    setLoadingBenchmark(true);
+    setBenchmark(null);
+    try {
+      setBenchmark(await postAction('benchmark'));
+    } catch (e) {
+      addToast('error', `${t('bench.benchError')}: ${e.message}`);
+    } finally {
+      setLoadingBenchmark(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'hardware' && !hardware) loadHardware();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const fmt = (n, digits = 1) => {
+    if (n == null || isNaN(n)) return '—';
+    return Number(n).toFixed(digits);
+  };
+
+  const Metric = ({ label, value, unit, color = 'text-foreground' }) => (
+    <div className="p-4 rounded-xl bg-background border border-border space-y-1">
+      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wide truncate">{label}</p>
+      <p className={`text-lg font-bold font-mono leading-tight ${color} break-all`}>
+        {value} {unit && <span className="text-[11px] text-muted-foreground font-normal">{unit}</span>}
+      </p>
+    </div>
+  );
+
   const handleUpdateDomain = async () => {
     setDomainLoading(true);
     try {
@@ -141,7 +196,6 @@ export function NodeLXDsPage() {
       if (res.ok) {
         addToast('success', t('node.customDomainUpdated'));
         setIsEditingDomain(false);
-        fetchNodes();
       } else {
         addToast('error', await res.text());
       }
@@ -293,6 +347,13 @@ export function NodeLXDsPage() {
           <Server className="size-3.5" />
           <span>🖥 {t('node.hostTerminal')}</span>
         </button>
+        <button
+          onClick={() => setActiveTab('hardware')}
+          className={`flex-1 py-2.5 rounded-md transition font-medium text-center flex items-center justify-center gap-1.5 ${activeTab === 'hardware' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <Cpu className="size-3.5" />
+          <span>{t('node.hardwareTab')}</span>
+        </button>
       </Card>
 
       {/* Tab: LXD Containers */}
@@ -411,6 +472,194 @@ export function NodeLXDsPage() {
             </div>
           </div>
           <NodeHostTerminal nodeId={nodeId} nodeName={targetNode?.name} />
+        </Card>
+      </div>
+
+      {/* Tab: Hardware & Benchmark */}
+      <div className={activeTab === 'hardware' ? 'block space-y-5' : 'hidden'}>
+        {/* Actions */}
+        <Card className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Cpu className="size-4 text-primary" />
+              <span>{t('bench.hardwareTitle')}</span>
+            </h2>
+            <p className="text-xs text-muted-foreground">{t('bench.benchDesc')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={loadHardware} disabled={loadingHardware || loadingBenchmark}>
+              <RefreshCw className={`size-3.5 mr-1.5 ${loadingHardware ? 'animate-spin' : ''}`} />
+              {t('bench.refresh')}
+            </Button>
+            <Button size="sm" onClick={runBenchmark} disabled={loadingBenchmark || loadingHardware}>
+              {loadingBenchmark ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <Zap className="size-3.5 mr-1.5" />}
+              {t('bench.run')}
+            </Button>
+          </div>
+        </Card>
+
+        {loadingHardware && !hardware ? (
+          <Card className="p-12 flex flex-col items-center justify-center gap-3 text-muted-foreground font-mono text-xs">
+            <Loader2 className="size-6 animate-spin text-primary" />
+            <span>{t('common.loading')}</span>
+          </Card>
+        ) : hardware ? (
+          <>
+            {/* System overview */}
+            <Card className="p-5 space-y-3">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono flex items-center gap-2">
+                <Activity className="size-3.5" /> {t('bench.overview')}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <Metric label={t('bench.hostname')} value={hardware.hostname || '—'} />
+                <Metric label={t('bench.os')} value={hardware.os || '—'} />
+                <Metric label={t('bench.kernel')} value={hardware.kernel || '—'} />
+                <Metric label={t('bench.arch')} value={hardware.architecture || '—'} />
+                <Metric label={t('bench.uptime')} value={hardware.uptime || '—'} />
+                <Metric label={t('bench.ramTotal')} value={hardware.ram_total_mb ? `${(hardware.ram_total_mb / 1024).toFixed(1)} GB` : '—'} />
+              </div>
+            </Card>
+
+            {/* CPU */}
+            <Card className="p-5 space-y-3">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono flex items-center gap-2">
+                <Cpu className="size-3.5" /> {t('bench.cpuTitle')}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="sm:col-span-2"><Metric label={t('bench.model')} value={hardware.cpu?.model || '—'} /></div>
+                <Metric label={t('bench.sockets')} value={hardware.cpu?.sockets ?? '—'} />
+                <Metric label={t('bench.cores')} value={hardware.cpu?.cores ?? '—'} />
+                <Metric label={t('bench.threads')} value={hardware.cpu?.threads ?? '—'} />
+              </div>
+              {hardware.cpu?.frequency && (
+                <p className="text-[11px] font-mono text-muted-foreground">{t('bench.frequency')}: {hardware.cpu.frequency}</p>
+              )}
+            </Card>
+
+            {/* Disks */}
+            <Card className="p-5 space-y-3">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono flex items-center gap-2">
+                <HardDrive className="size-3.5" /> {t('bench.disksTitle')}
+              </h3>
+              {hardware.disks?.length ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {hardware.disks.map(d => (
+                    <div key={d.name} className="p-4 rounded-xl bg-background border border-border">
+                      <p className="font-bold text-foreground font-mono text-xs flex items-center gap-2">
+                        <HardDrive className="size-3.5 text-cyan-400" /> {d.name}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate mt-1" title={d.model}>{d.model || '—'}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <Badge variant={d.type === 'ssd' ? 'success' : d.type === 'hdd' ? 'warning' : 'outline'}>
+                          {d.type === 'ssd' ? t('bench.typeSSD') : d.type === 'hdd' ? t('bench.typeHDD') : t('bench.typeUnknown')}
+                        </Badge>
+                        <span className="text-xs font-mono text-foreground">{d.size_gb} GB</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs font-mono text-muted-foreground">—</p>
+              )}
+            </Card>
+
+            {/* Network interfaces */}
+            <Card className="p-5 space-y-3">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono flex items-center gap-2">
+                <Network className="size-3.5" /> {t('bench.netTitle')}
+              </h3>
+              {hardware.networks?.length ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {hardware.networks.map(n => (
+                    <div key={n.name} className="p-4 rounded-xl bg-background border border-border space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-foreground font-mono text-xs flex items-center gap-2">
+                          <Network className="size-3.5 text-emerald-400" /> {n.name}
+                        </p>
+                        <Badge variant={n.state === 'up' ? 'success' : 'secondary'}>
+                          {n.state === 'up' ? t('bench.ifStateUp') : t('bench.ifStateDown')}
+                        </Badge>
+                      </div>
+                      <p className="text-[10px] font-mono text-muted-foreground">{t('bench.ifMac')}: {n.mac || '—'}</p>
+                      {n.speed && <p className="text-[10px] font-mono text-muted-foreground">{t('bench.ifSpeed')}: {n.speed} Mb/s</p>}
+                      {n.addresses?.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {n.addresses.map(a => (
+                            <span key={a} className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono text-[10px]">{a}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs font-mono text-muted-foreground">—</p>
+              )}
+            </Card>
+          </>
+        ) : null}
+
+        {/* Benchmark */}
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono flex items-center gap-2">
+              <Gauge className="size-3.5" /> {t('bench.benchTitle')}
+            </h3>
+            {loadingBenchmark && (
+              <span className="text-xs font-mono text-muted-foreground flex items-center gap-2">
+                <Loader2 className="size-3.5 animate-spin text-primary" /> {t('bench.running')}
+              </span>
+            )}
+          </div>
+
+          {benchmark ? (
+            <div className="space-y-5">
+              {/* Speed Index */}
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-primary/15 via-background to-emerald-500/10 border border-primary/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-foreground uppercase tracking-wider font-mono flex items-center gap-2">
+                      <Zap className="size-4 text-amber-400" /> {t('bench.speedIndex')}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{t('bench.indexDesc')}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-5xl font-extrabold font-mono ${benchmark.speed_index >= 70 ? 'text-emerald-400' : benchmark.speed_index >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {benchmark.speed_index}
+                    </span>
+                    <span className="text-sm font-mono text-muted-foreground">/100</span>
+                  </div>
+                </div>
+                <div className="mt-3 h-2.5 rounded-full bg-background border border-border overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ${benchmark.speed_index >= 70 ? 'bg-emerald-400' : benchmark.speed_index >= 40 ? 'bg-amber-400' : 'bg-red-400'}`}
+                    style={{ width: `${Math.min(100, Math.max(0, benchmark.speed_index))}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Metric grid */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                <Metric label={t('bench.cpuSingle')} value={fmt(benchmark.cpu_score, 0)} unit={t('bench.opsPerSec')} color="text-sky-400" />
+                <Metric label={t('bench.cpuMulti')} value={fmt(benchmark.cpu_multi_score, 0)} unit={t('bench.opsPerSec')} color="text-sky-400" />
+                <Metric label={t('bench.memWrite')} value={fmt(benchmark.memory_write_mbs)} unit={t('bench.mbs')} color="text-purple-400" />
+                <Metric label={t('bench.memRead')} value={fmt(benchmark.memory_read_mbs)} unit={t('bench.mbs')} color="text-purple-400" />
+                <Metric label={t('bench.diskWrite')} value={fmt(benchmark.disk_write_mbs)} unit={t('bench.mbs')} color="text-cyan-400" />
+                <Metric label={t('bench.diskRead')} value={fmt(benchmark.disk_read_mbs)} unit={t('bench.mbs')} color="text-cyan-400" />
+                <Metric
+                  label={t('bench.net')}
+                  value={benchmark.network_ok ? fmt(benchmark.network_mbps) : '—'}
+                  unit={benchmark.network_ok ? t('bench.mbps') : t('bench.netUnreachable')}
+                  color="text-emerald-400"
+                />
+                <Metric label={t('bench.duration')} value={benchmark.duration_sec != null ? `${benchmark.duration_sec.toFixed(1)} s` : '—'} />
+              </div>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-xs font-mono text-muted-foreground border border-dashed border-border rounded-xl">
+              {t('bench.benchDesc')}
+            </div>
+          )}
         </Card>
       </div>
 

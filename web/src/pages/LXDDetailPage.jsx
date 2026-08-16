@@ -10,7 +10,7 @@ import { useI18n } from '../i18n';
 export function LXDDetailPage() {
   const { nodeId, lxdName } = useParams();
   const navigate = useNavigate();
-  const { nodes, fetchNodes, addToast } = useOutletContext();
+  const { nodes, addToast } = useOutletContext();
   const { t } = useI18n();
 
   const [activeTab, setActiveTab] = useState('overview');
@@ -91,8 +91,6 @@ export function LXDDetailPage() {
         addToast('success', t('detail.actionSuccess', { action, name: lxdName }));
         if (action === 'delete') {
           navigate(`/nodes/${nodeId}`);
-        } else {
-          fetchNodes();
         }
       } else {
         addToast('error', await res.text());
@@ -132,7 +130,6 @@ export function LXDDetailPage() {
       });
       if (res.ok) {
         addToast('success', t('detail.configSaved', { name: lxdName }));
-        fetchNodes();
       } else {
         addToast('error', await res.text());
       }
@@ -205,7 +202,6 @@ export function LXDDetailPage() {
       });
       if (res.ok) {
         addToast('success', t('detail.restored', { name: lxdName, snap: snapName }));
-        fetchNodes();
       } else {
         addToast('error', await res.text());
       }

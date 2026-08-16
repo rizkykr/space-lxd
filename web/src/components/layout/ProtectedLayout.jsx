@@ -34,25 +34,8 @@ export function ProtectedLayout({ user, onLogout }) {
     }, 4000);
   };
 
-  const fetchNodes = async () => {
-    try {
-      const res = await fetch('/api/nodes');
-      if (res.ok) {
-        const data = await res.json();
-        setNodes(data || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch nodes:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchNodes();
-    const interval = setInterval(fetchNodes, 10000); // Poll fallback (WS primary)
-    return () => clearInterval(interval);
-  }, []);
-
-  // Realtime cluster state push from master WebSocket
+  // Realtime cluster state: pushed exclusively over the dashboard WebSocket
+  // (no HTTP polling / manual refresh).
   useEffect(() => {
     let socket;
     let retryTimer;
@@ -130,7 +113,6 @@ export function ProtectedLayout({ user, onLogout }) {
           user={user}
           nodesCount={nodes.length}
           onLogout={onLogout}
-          onRefresh={fetchNodes}
           onToggleMobileNav={() => setMobileNavOpen(prev => !prev)}
         />
 
@@ -138,7 +120,6 @@ export function ProtectedLayout({ user, onLogout }) {
           <Outlet
             context={{
               nodes,
-              fetchNodes,
               addToast,
               onOpenAddNode: handleOpenAddNode,
               onOpenCreateLXD: () => setShowCreateLXDModal(true)
@@ -170,14 +151,13 @@ export function ProtectedLayout({ user, onLogout }) {
       )}
 
       {showAddNodeModal && joinTokenData && (
-        <AddNodeModal joinTokenData={joinTokenData} onClose={() => setShowAddNodeModal(false)} />
+        <AddNodeModal joinTokenData={joinTokenData} nodes={nodes} onClose={() => setShowAddNodeModal(false)} />
       )}
 
       {showCreateLXDModal && (
         <CreateLXDModal
           nodes={nodes}
           onClose={() => setShowCreateLXDModal(false)}
-          onRefresh={fetchNodes}
           addToast={addToast}
         />
       )}

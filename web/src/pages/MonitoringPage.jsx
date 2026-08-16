@@ -7,7 +7,7 @@ import { LineChart, ChevronDown, ChevronUp, Terminal, Play, Square, Sliders } fr
 import { useI18n } from '../i18n';
 
 export function MonitoringPage() {
-  const { nodes, fetchNodes, addToast } = useOutletContext();
+  const { nodes, addToast } = useOutletContext();
   const navigate = useNavigate();
   const { t } = useI18n();
 
@@ -58,7 +58,6 @@ export function MonitoringPage() {
       });
       if (res.ok) {
         addToast('success', t('mon.actionDone', { action, name: lxdName }));
-        fetchNodes();
       } else {
         addToast('error', await res.text());
       }
