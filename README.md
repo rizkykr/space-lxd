@@ -180,6 +180,7 @@ Environment variables (optional, with sensible auto-detection):
 | :-- | :-- | :-- |
 | `PORT` | `9090` | Master HTTP port. |
 | `DB_PATH` | `lxd-manager.db` | SQLite database path. |
+| `DB_BACKUP_DIR` | `backups` | Directory for automatic daily SQLite backups (keeps the last 7). |
 | `JWT_SECRET` | generated fallback | **Set a strong secret in production.** |
 | `LXD_SOCKET` | auto-detected | Snap (`/var/snap/lxd/...`), native LXD (`/var/lib/lxd/...`), or Incus (`/var/lib/incus/...`). |
 | `MASTER_PUBLIC_URL` | auto | Public URL / domain for join commands. |

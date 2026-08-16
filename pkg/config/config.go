@@ -9,6 +9,7 @@ import (
 type MasterConfig struct {
 	Port         string
 	DBPath       string
+	DBBackupDir  string
 	JWTSecret    string
 	LXDSocket    string
 	MasterPublic string // e.g. http://master-ip:9090 or https://domain.com
@@ -31,6 +32,10 @@ func LoadMasterConfig() MasterConfig {
 	if dbPath == "" {
 		dbPath = "lxd-manager.db"
 	}
+	dbBackupDir := os.Getenv("DB_BACKUP_DIR")
+	if dbBackupDir == "" {
+		dbBackupDir = "backups"
+	}
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		jwtSecret = "lxd-manager-super-secret-key-2026"
@@ -47,6 +52,7 @@ func LoadMasterConfig() MasterConfig {
 	return MasterConfig{
 		Port:         port,
 		DBPath:       dbPath,
+		DBBackupDir:  dbBackupDir,
 		JWTSecret:    jwtSecret,
 		LXDSocket:    lxdSocket,
 		MasterPublic: masterPublic,

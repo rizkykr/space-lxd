@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -72,8 +73,15 @@ func InitDB(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
 
+	// Robustness: single serialized connection (single-process master) avoids
+	// "database is locked" write contention entirely, and busy_timeout backs up
+	// any rare transient contention from other tooling.
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+
 	_, _ = sqlDB.Exec("PRAGMA journal_mode=WAL;")
 	_, _ = sqlDB.Exec("PRAGMA foreign_keys=ON;")
+	_, _ = sqlDB.Exec("PRAGMA busy_timeout=10000;")
 
 	database := &DB{sqlDB}
 
@@ -83,7 +91,24 @@ func InitDB(dbPath string) (*DB, error) {
 
 	database.migrateColumns()
 
+	if err := database.createIndexes(); err != nil {
+		return nil, err
+	}
+
 	return database, nil
+}
+
+func (db *DB) createIndexes() error {
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)",
+		"CREATE INDEX IF NOT EXISTS idx_join_used ON join_tokens(used)",
+	}
+	for _, q := range indexes {
+		if _, err := db.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (db *DB) createTables() error {
@@ -281,20 +306,12 @@ func (db *DB) DeleteNode(nodeID string) error {
 }
 
 func (db *DB) UpdateNodeName(nodeID string, newName string) error {
-	_, err := db.Exec("UPDATE nodes SET name = ? WHERE id = ?", newName, newName)
-	if err != nil {
-		return err
-	}
-	_, err = db.Exec("UPDATE nodes SET name = ? WHERE id = ?", newName, nodeID)
+	_, err := db.Exec("UPDATE nodes SET name = ? WHERE id = ?", newName, nodeID)
 	return err
 }
 
 func (db *DB) UpdateNodeIPDomain(nodeID string, customIPDomain string) error {
-	_, err := db.Exec("UPDATE nodes SET custom_ip_domain = ? WHERE id = ?", customIPDomain, customIPDomain)
-	if err != nil {
-		return err
-	}
-	_, err = db.Exec("UPDATE nodes SET custom_ip_domain = ? WHERE id = ?", customIPDomain, nodeID)
+	_, err := db.Exec("UPDATE nodes SET custom_ip_domain = ? WHERE id = ?", customIPDomain, nodeID)
 	return err
 }
 
@@ -406,4 +423,33 @@ func (db *DB) GetAllSettings() map[string]string {
 		}
 	}
 	return res
+}
+
+// PruneOldData removes expired/old rows so the database never grows unbounded.
+func (db *DB) PruneOldData(auditRetentionDays int, tokenRetentionDays int) error {
+	if auditRetentionDays <= 0 {
+		auditRetentionDays = 90
+	}
+	if tokenRetentionDays <= 0 {
+		tokenRetentionDays = 7
+	}
+
+	_, err := db.Exec("DELETE FROM audit_logs WHERE created_at < datetime('now', ?)", fmt.Sprintf("-%d days", auditRetentionDays))
+	if err != nil {
+		return err
+	}
+	// Join tokens are single-use: drop consumed ones and anything past retention.
+	_, err = db.Exec("DELETE FROM join_tokens WHERE created_at < datetime('now', ?) OR used = 1", fmt.Sprintf("-%d days", tokenRetentionDays))
+	return err
+}
+
+// Backup writes a consistent snapshot of the database using VACUUM INTO.
+// SQLite does not allow bind parameters for the target path, so it is escaped.
+func (db *DB) Backup(path string) error {
+	if path == "" {
+		return fmt.Errorf("backup path is empty")
+	}
+	escaped := strings.ReplaceAll(path, "'", "''")
+	_, err := db.Exec(fmt.Sprintf("VACUUM INTO '%s'", escaped))
+	return err
 }
