@@ -285,37 +285,77 @@ export function LXDDetailPage() {
         </div>
 
         {/* Action Toolbar */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {isRunning ? (
             <>
-              <Button variant="outline" onClick={() => handleAction('stop')} disabled={!!loadingAction}>
-                {loadingAction === 'stop' ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <Square className="size-3.5 text-amber-400 mr-1.5" />}
-                <span>{loadingAction === 'stop' ? 'Stopping...' : t('detail.stop')}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 sm:px-3 text-xs"
+                onClick={() => handleAction('stop')}
+                disabled={!!loadingAction}
+                title="Stop Container"
+              >
+                {loadingAction === 'stop' ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 text-amber-400 sm:mr-1.5" />}
+                <span className="hidden sm:inline">{t('detail.stop')}</span>
               </Button>
-              <Button variant="outline" onClick={() => handleAction('restart')} disabled={!!loadingAction}>
-                {loadingAction === 'restart' ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <RotateCcw className="size-3.5 text-cyan-400 mr-1.5" />}
-                <span>{loadingAction === 'restart' ? 'Restarting...' : t('detail.restart')}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 sm:px-3 text-xs"
+                onClick={() => handleAction('restart')}
+                disabled={!!loadingAction}
+                title="Restart Container"
+              >
+                {loadingAction === 'restart' ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5 text-cyan-400 sm:mr-1.5" />}
+                <span className="hidden sm:inline">{t('detail.restart')}</span>
               </Button>
-              <Button variant="outline" onClick={() => handleAction('pause')} disabled={!!loadingAction}>
-                {loadingAction === 'pause' ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <Square className="size-3.5 text-purple-400 mr-1.5" />}
-                <span>{loadingAction === 'pause' ? 'Freezing...' : t('detail.freeze')}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 sm:px-3 text-xs"
+                onClick={() => handleAction('pause')}
+                disabled={!!loadingAction}
+                title="Freeze/Pause Container"
+              >
+                {loadingAction === 'pause' ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 text-purple-400 sm:mr-1.5" />}
+                <span className="hidden sm:inline">{t('detail.freeze')}</span>
               </Button>
             </>
           ) : isFrozen ? (
-            <Button variant="outline" onClick={() => handleAction('resume')} disabled={!!loadingAction}>
-              {loadingAction === 'resume' ? <Loader2 className="size-3.5 animate-spin text-emerald-400 mr-1.5" /> : <Play className="size-3.5 text-emerald-400 mr-1.5" />}
-              <span>{loadingAction === 'resume' ? 'Resuming...' : t('detail.resume')}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2.5 sm:px-3 text-xs"
+              onClick={() => handleAction('resume')}
+              disabled={!!loadingAction}
+            >
+              {loadingAction === 'resume' ? <Loader2 className="size-3.5 animate-spin text-emerald-400" /> : <Play className="size-3.5 text-emerald-400 sm:mr-1.5" />}
+              <span className="hidden sm:inline">{t('detail.resume')}</span>
             </Button>
           ) : (
-            <Button variant="outline" onClick={() => handleAction('start')} disabled={!!loadingAction}>
-              {loadingAction === 'start' ? <Loader2 className="size-3.5 animate-spin text-emerald-400 mr-1.5" /> : <Play className="size-3.5 text-emerald-400 mr-1.5" />}
-              <span>{loadingAction === 'start' ? 'Starting...' : t('detail.start')}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2.5 sm:px-3 text-xs"
+              onClick={() => handleAction('start')}
+              disabled={!!loadingAction}
+            >
+              {loadingAction === 'start' ? <Loader2 className="size-3.5 animate-spin text-emerald-400" /> : <Play className="size-3.5 text-emerald-400 sm:mr-1.5" />}
+              <span className="hidden sm:inline">{t('detail.start')}</span>
             </Button>
           )}
 
-          <Button variant="destructive" onClick={promptDeleteLXD} disabled={!!loadingAction}>
-            {loadingAction === 'delete' ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <Trash2 className="size-3.5 mr-1.5" />}
-            <span>{loadingAction === 'delete' ? 'Deleting...' : t('detail.delete')}</span>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="h-8 px-2.5 sm:px-3 text-xs"
+            onClick={promptDeleteLXD}
+            disabled={!!loadingAction}
+            title="Delete Container"
+          >
+            {loadingAction === 'delete' ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5 sm:mr-1.5" />}
+            <span className="hidden sm:inline">{t('detail.delete')}</span>
           </Button>
         </div>
       </div>
@@ -369,6 +409,69 @@ export function LXDDetailPage() {
               <p className="text-xl font-bold font-mono text-emerald-400">{configForm.autostart ? t('common.enabled') : t('common.disabled')}</p>
             </Card>
           </div>
+
+          {/* Creation Specs & OS Environment Metadata Card */}
+          <Card className="p-5 space-y-4">
+            <div className="border-b border-border pb-3">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <span>📦 {t('detail.specsTitle')}</span>
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {t('detail.specsDesc')}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs font-mono">
+              <div className="p-3 bg-secondary/30 rounded-lg border border-border space-y-1">
+                <span className="text-[11px] text-muted-foreground uppercase">{t('detail.baseImage')}</span>
+                <p className="text-foreground font-bold truncate" title={lxdItem.os_image || 'ubuntu:24.04'}>
+                  {lxdItem.os_image || 'ubuntu:24.04'}
+                </p>
+              </div>
+
+              <div className="p-3 bg-secondary/30 rounded-lg border border-border space-y-1">
+                <span className="text-[11px] text-muted-foreground uppercase">{t('detail.architecture')}</span>
+                <p className="text-foreground font-bold">{lxdItem.os_architecture || 'x86_64'}</p>
+              </div>
+
+              <div className="p-3 bg-secondary/30 rounded-lg border border-border space-y-1">
+                <span className="text-[11px] text-muted-foreground uppercase">{t('detail.diskQuota')}</span>
+                <p className="text-foreground font-bold">{lxdItem.disk_gb ? `${lxdItem.disk_gb} GB` : 'Dynamic / Pool'}</p>
+              </div>
+
+              <div className="p-3 bg-secondary/30 rounded-lg border border-border space-y-1">
+                <span className="text-[11px] text-muted-foreground uppercase">{t('detail.storagePool')}</span>
+                <p className="text-foreground font-bold">{lxdItem.storage_pool || 'default'}</p>
+              </div>
+
+              <div className="p-3 bg-secondary/30 rounded-lg border border-border space-y-1">
+                <span className="text-[11px] text-muted-foreground uppercase">{t('detail.networkBridge')}</span>
+                <p className="text-foreground font-bold">{lxdItem.network || 'lxdbr0'}</p>
+              </div>
+
+              <div className="p-3 bg-secondary/30 rounded-lg border border-border space-y-1">
+                <span className="text-[11px] text-muted-foreground uppercase">{t('detail.preset')}</span>
+                <p className="text-primary font-bold capitalize">{lxdItem.template_preset || 'Standard Base'}</p>
+              </div>
+
+              <div className="p-3 bg-secondary/30 rounded-lg border border-border space-y-1">
+                <span className="text-[11px] text-muted-foreground uppercase">{t('detail.timezone')}</span>
+                <p className="text-foreground font-bold">{lxdItem.timezone || 'UTC'}</p>
+              </div>
+
+              <div className="p-3 bg-secondary/30 rounded-lg border border-border space-y-1">
+                <span className="text-[11px] text-muted-foreground uppercase">{t('detail.nesting')}</span>
+                <p className="text-emerald-400 font-bold">{lxdItem.nesting !== false ? 'Enabled' : 'Disabled'}</p>
+              </div>
+
+              <div className="p-3 bg-secondary/30 rounded-lg border border-border space-y-1">
+                <span className="text-[11px] text-muted-foreground uppercase">{t('detail.createdAt')}</span>
+                <p className="text-foreground font-bold">
+                  {lxdItem.created_at ? new Date(lxdItem.created_at).toLocaleString() : 'Recent'}
+                </p>
+              </div>
+            </div>
+          </Card>
 
           <Card className="p-5 space-y-3">
             <h3 className="text-xs font-bold text-foreground uppercase tracking-wider font-mono">{t('detail.telemetry')}</h3>

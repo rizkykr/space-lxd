@@ -228,7 +228,8 @@ func handleMasterMessage(conn *websocket.Conn, wsMu *sync.Mutex, lxdClient *lxd.
 		} else {
 			log.Printf("🖥️ [Agent LXD Terminal Tunnel] Opening terminal for LXD '%s' (session %s)", instName, sessionID)
 			lxcBin := lxd.FindLXCBin()
-			cmd = exec.Command(lxcBin, "exec", instName, "--", "bash")
+			shellScript := "if [ -x /bin/bash ]; then exec /bin/bash; elif [ -x /usr/bin/bash ]; then exec /usr/bin/bash; elif [ -x /bin/ash ]; then exec /bin/ash; else exec /bin/sh; fi"
+			cmd = exec.Command(lxcBin, "exec", instName, "--", "/bin/sh", "-c", shellScript)
 		}
 		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 

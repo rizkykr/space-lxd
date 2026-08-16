@@ -1162,7 +1162,7 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 				"-o", "ConnectTimeout=10",
 				"-t",
 				fmt.Sprintf("space-lxd@%s", cleanIP),
-				fmt.Sprintf("lxc exec %s -- bash || lxc exec %s -- sh", instName, instName),
+				fmt.Sprintf("lxc exec %s -- /bin/sh -c 'if [ -x /bin/bash ]; then exec /bin/bash; elif [ -x /usr/bin/bash ]; then exec /usr/bin/bash; elif [ -x /bin/ash ]; then exec /bin/ash; else exec /bin/sh; fi'", instName),
 			}
 			cmd = exec.Command("ssh", sshOpts...)
 			cmd.Env = append(os.Environ(), "TERM=xterm-256color")
@@ -1231,13 +1231,14 @@ func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Target LXD is on local master node -> Execute local lxc exec
-	cmd = exec.Command(lxcBin, "exec", instName, "--", "bash")
+	// Target LXD is on local master node -> Execute universal shell launcher (supports Alpine, Ubuntu, Debian, CentOS, Arch)
+	shellScript := "if [ -x /bin/bash ]; then exec /bin/bash; elif [ -x /usr/bin/bash ]; then exec /usr/bin/bash; elif [ -x /bin/ash ]; then exec /bin/ash; else exec /bin/sh; fi"
+	cmd = exec.Command(lxcBin, "exec", instName, "--", "/bin/sh", "-c", shellScript)
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
-		// Fallback to sh if bash is not in container
+		// Fallback to simple sh if needed
 		cmd = exec.Command(lxcBin, "exec", instName, "--", "sh")
 		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 		ptmx, err = pty.Start(cmd)

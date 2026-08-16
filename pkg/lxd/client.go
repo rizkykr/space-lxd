@@ -16,15 +16,29 @@ import (
 )
 
 type LXD struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`   // "container" or "virtual-machine"
-	Status      string `json:"status"` // "Running", "Stopped", "Frozen"
-	IPv4        string `json:"ipv4"`
-	RAMUsedMB   int64  `json:"ram_used_mb"`
-	RAMLimitMB  int64  `json:"ram_limit_mb"`
-	CPUCores    int    `json:"cpu_cores"`
-	CPUUsagePct float64`json:"cpu_usage_pct"`
-	Autostart   bool   `json:"autostart"`
+	Name           string            `json:"name"`
+	Type           string            `json:"type"`   // "container" or "virtual-machine"
+	Status         string            `json:"status"` // "Running", "Stopped", "Frozen"
+	IPv4           string            `json:"ipv4"`
+	RAMUsedMB      int64             `json:"ram_used_mb"`
+	RAMLimitMB     int64             `json:"ram_limit_mb"`
+	CPUCores       int               `json:"cpu_cores"`
+	CPUUsagePct    float64           `json:"cpu_usage_pct"`
+	DiskGB         int               `json:"disk_gb"`
+	Autostart      bool              `json:"autostart"`
+	OSImage        string            `json:"os_image"`
+	OSName         string            `json:"os_name"`
+	OSRelease      string            `json:"os_release"`
+	OSArchitecture string            `json:"os_architecture"`
+	Timezone       string            `json:"timezone"`
+	CreatedAt      string            `json:"created_at"`
+	TemplatePreset string            `json:"template_preset"`
+	StoragePool    string            `json:"storage_pool"`
+	Network        string            `json:"network"`
+	Privileged     bool              `json:"privileged"`
+	Nesting        bool              `json:"nesting"`
+	MemorySwap     bool              `json:"memory_swap"`
+	Config         map[string]string `json:"config,omitempty"`
 }
 
 type Instance = LXD
@@ -319,15 +333,59 @@ func (c *Client) ListInstances() ([]LXD, error) {
 			memMB = memMB * 1024
 		}
 
+		osImage := item.Config["user.space_lxd.image"]
+		if osImage == "" {
+			if desc := item.Config["image.description"]; desc != "" {
+				osImage = desc
+			} else if osName := item.Config["image.os"]; osName != "" {
+				osImage = osName
+				if rel := item.Config["image.release"]; rel != "" {
+					osImage += ":" + rel
+				}
+			} else {
+				osImage = "Linux"
+			}
+		}
+
+		osName := item.Config["image.os"]
+		if osName == "" {
+			osName = "Linux"
+		}
+		osRelease := item.Config["image.release"]
+		osArch := item.Config["image.architecture"]
+		tz := item.Config["environment.TZ"]
+		createdAt := item.Config["user.space_lxd.created_at"]
+		templatePreset := item.Config["user.space_lxd.template_preset"]
+		storagePool := item.Config["user.space_lxd.storage_pool"]
+		network := item.Config["user.space_lxd.network"]
+		privileged := item.Config["security.privileged"] == "true"
+		nesting := item.Config["security.nesting"] == "true"
+		memorySwap := item.Config["limits.memory.swap"] != "false"
+		diskGB, _ := strconv.Atoi(item.Config["user.space_lxd.disk_gb"])
+
 		instances = append(instances, LXD{
-			Name:       item.Name,
-			Type:       instType,
-			Status:     item.Status,
-			IPv4:       ipv4,
-			RAMUsedMB:  ramUsed,
-			RAMLimitMB: memMB,
-			CPUCores:   cores,
-			Autostart:  autostart,
+			Name:           item.Name,
+			Type:           instType,
+			Status:         item.Status,
+			IPv4:           ipv4,
+			RAMUsedMB:      ramUsed,
+			RAMLimitMB:     memMB,
+			CPUCores:       cores,
+			DiskGB:         diskGB,
+			Autostart:      autostart,
+			OSImage:        osImage,
+			OSName:         osName,
+			OSRelease:      osRelease,
+			OSArchitecture: osArch,
+			Timezone:       tz,
+			CreatedAt:      createdAt,
+			TemplatePreset: templatePreset,
+			StoragePool:    storagePool,
+			Network:        network,
+			Privileged:     privileged,
+			Nesting:        nesting,
+			MemorySwap:     memorySwap,
+			Config:         item.Config,
 		})
 	}
 
@@ -753,6 +811,21 @@ func (c *Client) LaunchInstanceStream(opts LaunchOptions, logFn func(string)) er
 	if autostart {
 		args = append(args, "-c", "boot.autostart=true")
 	}
+
+	// Persist creation metadata and specs
+	args = append(args,
+		"-c", fmt.Sprintf("user.space_lxd.image=%s", image),
+		"-c", fmt.Sprintf("user.space_lxd.created_at=%s", time.Now().UTC().Format(time.RFC3339)),
+		"-c", fmt.Sprintf("user.space_lxd.type=%s", instType),
+		"-c", fmt.Sprintf("user.space_lxd.ram_gb=%d", ramGB),
+		"-c", fmt.Sprintf("user.space_lxd.cpu_cores=%d", cpuCores),
+		"-c", fmt.Sprintf("user.space_lxd.disk_gb=%d", diskGB),
+		"-c", fmt.Sprintf("user.space_lxd.template_preset=%s", templatePreset),
+		"-c", fmt.Sprintf("user.space_lxd.storage_pool=%s", strings.TrimSpace(opts.StoragePool)),
+		"-c", fmt.Sprintf("user.space_lxd.network=%s", strings.TrimSpace(opts.Network)),
+		"-c", fmt.Sprintf("user.space_lxd.privileged=%t", opts.Privileged),
+		"-c", fmt.Sprintf("user.space_lxd.nesting=%t", opts.Nesting),
+	)
 
 	candidates := getImageCandidates(image)
 	var lastOut string

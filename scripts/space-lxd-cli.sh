@@ -119,7 +119,7 @@ connect_terminal() {
     read -p "Masukkan nama LXD Container yang ingin diajar (misal: web1): " container_name
     if [ -n "$container_name" ]; then
       echo -e "${COLOR_CYAN}Menghubungkan ke shell container '$container_name'...${COLOR_RESET}"
-      lxc exec "$container_name" -- /bin/bash || lxc exec "$container_name" -- /bin/sh || echo "Gagal terhubung."
+      lxc exec "$container_name" -- /bin/sh -c 'if [ -x /bin/bash ]; then exec /bin/bash; elif [ -x /usr/bin/bash ]; then exec /usr/bin/bash; elif [ -x /bin/ash ]; then exec /bin/ash; else exec /bin/sh; fi' || echo "Gagal terhubung."
     fi
   else
     echo -e "${COLOR_RED}Perintah 'lxc' tidak ditemukan.${COLOR_RESET}"
