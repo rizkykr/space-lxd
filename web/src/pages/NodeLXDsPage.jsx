@@ -420,12 +420,12 @@ export function NodeLXDsPage() {
                                 <Button variant="ghost" size="icon" onClick={() => setActiveTerminalTarget(item)} title={t('node.terminalShell')}>
                                   <Terminal className="size-3.5 text-primary" />
                                 </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleLXDAction('stop', item.name)} disabled={isItemLoading} title="Stop">
+                                <Button variant="ghost" size="icon" onClick={() => handleLXDAction('stop', item.name)} disabled={isItemLoading} title={t('common.stop')}>
                                   {loadingAction === `stop_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 text-amber-400" />}
                                 </Button>
                               </>
                             ) : (
-                              <Button variant="ghost" size="icon" onClick={() => handleLXDAction('start', item.name)} disabled={isItemLoading} title="Start">
+                              <Button variant="ghost" size="icon" onClick={() => handleLXDAction('start', item.name)} disabled={isItemLoading} title={t('common.start')}>
                                 {loadingAction === `start_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 text-emerald-400" />}
                               </Button>
                             )}

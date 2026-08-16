@@ -290,7 +290,7 @@ export function LXDDetailPage() {
                 className="h-8 px-2.5 sm:px-3 text-xs"
                 onClick={() => handleAction('stop')}
                 disabled={!!loadingAction}
-                title="Stop Container"
+                title={t('detail.stop')}
               >
                 {loadingAction === 'stop' ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 text-amber-400 sm:mr-1.5" />}
                 <span className="hidden sm:inline">{t('detail.stop')}</span>
@@ -301,7 +301,7 @@ export function LXDDetailPage() {
                 className="h-8 px-2.5 sm:px-3 text-xs"
                 onClick={() => handleAction('restart')}
                 disabled={!!loadingAction}
-                title="Restart Container"
+                title={t('detail.restart')}
               >
                 {loadingAction === 'restart' ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5 text-cyan-400 sm:mr-1.5" />}
                 <span className="hidden sm:inline">{t('detail.restart')}</span>
@@ -312,7 +312,7 @@ export function LXDDetailPage() {
                 className="h-8 px-2.5 sm:px-3 text-xs"
                 onClick={() => handleAction('pause')}
                 disabled={!!loadingAction}
-                title="Freeze/Pause Container"
+                title={t('detail.freeze')}
               >
                 {loadingAction === 'pause' ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 text-purple-400 sm:mr-1.5" />}
                 <span className="hidden sm:inline">{t('detail.freeze')}</span>
@@ -325,6 +325,7 @@ export function LXDDetailPage() {
               className="h-8 px-2.5 sm:px-3 text-xs"
               onClick={() => handleAction('resume')}
               disabled={!!loadingAction}
+              title={t('detail.resume')}
             >
               {loadingAction === 'resume' ? <Loader2 className="size-3.5 animate-spin text-emerald-400" /> : <Play className="size-3.5 text-emerald-400 sm:mr-1.5" />}
               <span className="hidden sm:inline">{t('detail.resume')}</span>
@@ -336,6 +337,7 @@ export function LXDDetailPage() {
               className="h-8 px-2.5 sm:px-3 text-xs"
               onClick={() => handleAction('start')}
               disabled={!!loadingAction}
+              title={t('detail.start')}
             >
               {loadingAction === 'start' ? <Loader2 className="size-3.5 animate-spin text-emerald-400" /> : <Play className="size-3.5 text-emerald-400 sm:mr-1.5" />}
               <span className="hidden sm:inline">{t('detail.start')}</span>
@@ -348,7 +350,7 @@ export function LXDDetailPage() {
             className="h-8 px-2.5 sm:px-3 text-xs"
             onClick={promptDeleteLXD}
             disabled={!!loadingAction}
-            title="Delete Container"
+            title={t('detail.delete')}
           >
             {loadingAction === 'delete' ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5 sm:mr-1.5" />}
             <span className="hidden sm:inline">{t('detail.delete')}</span>

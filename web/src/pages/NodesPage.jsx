@@ -101,7 +101,7 @@ export function NodesPage() {
                         </Button>
                       </div>
                       <p className="text-xs font-mono text-muted-foreground mt-1">
-                        IP: {node.custom_ip_domain ? <span className="text-emerald-400 font-bold" title="Custom Domain / IP Active">{node.custom_ip_domain} ({node.ip})</span> : (node.ip || '127.0.0.1')}
+                        IP: {node.custom_ip_domain ? <span className="text-emerald-400 font-bold" title={t('nodes.customDomainActive')}>{node.custom_ip_domain} ({node.ip})</span> : (node.ip || '127.0.0.1')}
                       </p>
                     </div>
                   )}
