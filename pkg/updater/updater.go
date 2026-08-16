@@ -27,7 +27,7 @@ type GitHubCommitResponse struct {
 
 // GetCurrentCommit returns short local git commit SHA or "v1.0.0"
 func GetCurrentCommit(repoPath string) string {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	cmd := exec.Command("git", "-c", "safe.directory=*", "rev-parse", "--short", "HEAD")
 	cmd.Dir = repoPath
 	out, err := cmd.Output()
 	if err != nil {
@@ -108,21 +108,21 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 	_ = exec.Command("sudo", "chown", "-R", "space-lxd:space-lxd", repoPath).Run()
 	_ = exec.Command("sudo", "chmod", "-R", "u+rwX,g+rwX", repoPath).Run()
 
-	fetchCmd := exec.Command("git", "fetch", "--all")
+	fetchCmd := exec.Command("git", "-c", "safe.directory=*", "fetch", "origin", "main")
 	fetchCmd.Dir = repoPath
 	fetchCmd.Env = env
 	if _, err := fetchCmd.CombinedOutput(); err != nil {
 		// Fallback silently using sudo git fetch
-		sudoFetch := exec.Command("sudo", "git", "-C", repoPath, "fetch", "--all")
+		sudoFetch := exec.Command("sudo", "git", "-c", "safe.directory=*", "-C", repoPath, "fetch", "origin", "main")
 		sudoFetch.Env = env
 		_ = sudoFetch.Run()
 	}
 
-	resetCmd := exec.Command("git", "reset", "--hard", "origin/main")
+	resetCmd := exec.Command("git", "-c", "safe.directory=*", "reset", "--hard", "origin/main")
 	resetCmd.Dir = repoPath
 	resetCmd.Env = env
 	if _, err := resetCmd.CombinedOutput(); err != nil {
-		sudoReset := exec.Command("sudo", "git", "-C", repoPath, "reset", "--hard", "origin/main")
+		sudoReset := exec.Command("sudo", "git", "-c", "safe.directory=*", "-C", repoPath, "reset", "--hard", "origin/main")
 		sudoReset.Env = env
 		if out, err := sudoReset.CombinedOutput(); err != nil {
 			logFn(fmt.Sprintf("❌ Error git reset: %s", string(out)))

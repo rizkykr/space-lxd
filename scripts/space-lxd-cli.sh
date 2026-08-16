@@ -20,6 +20,18 @@ while [ -h "$REAL_SOURCE" ]; do
 done
 SCRIPT_DIR="$(cd -P "$(dirname "$REAL_SOURCE")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
+
+# Fallback repo detection if ROOT_DIR is not a git repo or missing scripts
+if [ ! -f "${ROOT_DIR}/scripts/build.sh" ]; then
+  if [ -f "/opt/space-lxd/scripts/build.sh" ]; then
+    ROOT_DIR="/opt/space-lxd"
+  elif [ -f "/home/space-lxd/space-lxd/scripts/build.sh" ]; then
+    ROOT_DIR="/home/space-lxd/space-lxd"
+  elif [ -f "./scripts/build.sh" ]; then
+    ROOT_DIR="$(pwd)"
+  fi
+fi
+
 PORT="${PORT:-9090}"
 
 banner() {
@@ -183,13 +195,34 @@ check_and_update() {
   banner
   echo -e "${COLOR_BOLD}🔄 MEMERIKSA UPDATE DARI GITHUB (rizkykr/space-lxd)...${COLOR_RESET}"
   echo "------------------------------------------------------"
+
+  # Ensure ROOT_DIR is correctly located
+  if [ ! -f "${ROOT_DIR}/scripts/build.sh" ]; then
+    if [ -f "/opt/space-lxd/scripts/build.sh" ]; then
+      ROOT_DIR="/opt/space-lxd"
+    elif [ -f "./scripts/build.sh" ]; then
+      ROOT_DIR="$(pwd)"
+    fi
+  fi
+
   cd "$ROOT_DIR" 2>/dev/null || true
-  git fetch --all >/dev/null 2>&1 || true
 
-  LOCAL_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-  REMOTE_HASH=$(git rev-parse --short origin/main 2>/dev/null || echo "unknown")
+  # Fetch latest updates with safe.directory override
+  git -c safe.directory=* fetch origin main >/dev/null 2>&1 || git -c safe.directory=* fetch --all >/dev/null 2>&1 || true
 
-  echo -e "  📌 Versi Terpasang:  ${COLOR_CYAN}${LOCAL_HASH}${COLOR_RESET}"
+  LOCAL_HASH=$(git -c safe.directory=* rev-parse --short HEAD 2>/dev/null)
+  [ -z "$LOCAL_HASH" ] && LOCAL_HASH="unknown"
+
+  REMOTE_HASH=$(git -c safe.directory=* rev-parse --short origin/main 2>/dev/null || git -c safe.directory=* rev-parse --short FETCH_HEAD 2>/dev/null)
+  if [ -z "$REMOTE_HASH" ] || [ "$REMOTE_HASH" = "unknown" ]; then
+    REMOTE_HASH=$(git -c safe.directory=* ls-remote https://github.com/rizkykr/space-lxd.git HEAD 2>/dev/null | awk '{print substr($1,1,7)}')
+  fi
+  if [ -z "$REMOTE_HASH" ] || [ "$REMOTE_HASH" = "unknown" ]; then
+    REMOTE_HASH=$(curl -s --max-time 4 "https://api.github.com/repos/rizkykr/space-lxd/commits/main" 2>/dev/null | grep -o '"sha": "[^"]*' | head -n1 | cut -d'"' -f4 | cut -c1-7)
+  fi
+  [ -z "$REMOTE_HASH" ] && REMOTE_HASH="unknown"
+
+  echo -e "  📌 Versi Terpasang:   ${COLOR_CYAN}${LOCAL_HASH}${COLOR_RESET}"
   echo -e "  🌐 Versi GitHub Main: ${COLOR_GREEN}${REMOTE_HASH}${COLOR_RESET}"
   echo "------------------------------------------------------"
 
@@ -199,8 +232,8 @@ check_and_update() {
     confirm=${confirm:-"Y"}
     if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
       echo -e "${COLOR_CYAN}Mengunduh kode terbaru dari GitHub...${COLOR_RESET}"
-      git reset --hard origin/main
-      git pull origin main
+      git -c safe.directory=* reset --hard origin/main
+      git -c safe.directory=* pull origin main
       echo -e "${COLOR_CYAN}Kompilasi biner dan aset React UI...${COLOR_RESET}"
       ./scripts/build.sh
       echo -e "${COLOR_GREEN}Merekonstruksi service Systemd...${COLOR_RESET}"
@@ -209,6 +242,8 @@ check_and_update() {
     else
       echo "Update dibatalkan."
     fi
+  elif [ "$LOCAL_HASH" = "unknown" ]; then
+    echo -e "${COLOR_YELLOW}⚠️ Lokasi repositori git tidak terdeteksi pada ${ROOT_DIR}.${COLOR_RESET}"
   else
     echo -e "${COLOR_GREEN}✅ Space LXD Dashboard sudah menggunakan versi terbaru (${LOCAL_HASH})!${COLOR_RESET}"
   fi
