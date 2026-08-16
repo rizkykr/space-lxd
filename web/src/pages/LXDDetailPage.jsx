@@ -319,28 +319,28 @@ export function LXDDetailPage() {
       </div>
 
       {/* Tabs Navigation Header */}
-      <Card className="p-1 flex border-border bg-card font-medium text-xs">
+      <Card className="p-1 flex border-border bg-card font-medium text-xs overflow-x-auto scrollbar-none gap-1">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`flex-1 py-2.5 rounded-md transition font-medium text-center ${activeTab === 'overview' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`flex-1 py-2.5 px-3 rounded-md transition font-medium text-center whitespace-nowrap shrink-0 ${activeTab === 'overview' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
           📊 {t('detail.tabOverview')}
         </button>
         <button
           onClick={() => setActiveTab('config')}
-          className={`flex-1 py-2.5 rounded-md transition font-medium text-center ${activeTab === 'config' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`flex-1 py-2.5 px-3 rounded-md transition font-medium text-center whitespace-nowrap shrink-0 ${activeTab === 'config' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
           ⚙️ {t('detail.tabConfig')}
         </button>
         <button
           onClick={() => setActiveTab('snapshots')}
-          className={`flex-1 py-2.5 rounded-md transition font-medium text-center ${activeTab === 'snapshots' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`flex-1 py-2.5 px-3 rounded-md transition font-medium text-center whitespace-nowrap shrink-0 ${activeTab === 'snapshots' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
           📸 {t('detail.tabSnapshots', { n: snapshots.length })}
         </button>
         <button
           onClick={() => setActiveTab('terminal')}
-          className={`flex-1 py-2.5 rounded-md transition font-medium text-center ${activeTab === 'terminal' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`flex-1 py-2.5 px-3 rounded-md transition font-medium text-center whitespace-nowrap shrink-0 ${activeTab === 'terminal' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
           🖥 {t('detail.tabTerminal')}
         </button>
@@ -525,7 +525,7 @@ export function LXDDetailPage() {
               ) : (
                 <div className="divide-y divide-border border border-border rounded-md overflow-hidden">
                   {snapshots.map((s, i) => (
-                    <div key={i} className="p-3.5 bg-card hover:bg-accent/40 transition flex items-center justify-between font-mono text-xs">
+                    <div key={i} className="p-3.5 bg-card hover:bg-accent/40 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono text-xs">
                       <div className="space-y-0.5">
                         <p className="text-foreground font-bold flex items-center gap-2">
                           <span>📸 {s.name}</span>
@@ -533,7 +533,7 @@ export function LXDDetailPage() {
                         <p className="text-[11px] text-muted-foreground">{t('detail.snapCreated', { date: s.created_at })}</p>
                       </div>
 
-                      <div className="flex items-center gap-2 font-sans">
+                      <div className="flex items-center gap-2 font-sans shrink-0">
                         <Button size="sm" variant="outline" onClick={() => promptRestoreSnapshot(s.name)} disabled={!!loadingAction}>
                           {loadingAction === `restore_${s.name}` ? <Loader2 className="size-3.5 animate-spin text-emerald-400 mr-1.5" /> : <RotateCcw className="size-3.5 text-emerald-400 mr-1.5" />}
                           <span>{loadingAction === `restore_${s.name}` ? 'Restoring...' : t('detail.restore')}</span>

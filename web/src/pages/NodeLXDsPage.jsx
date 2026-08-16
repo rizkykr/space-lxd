@@ -197,16 +197,16 @@ export function NodeLXDsPage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setActiveTab('terminal')}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setActiveTab('terminal')}>
             <Server className="size-4 mr-1.5" />
             <span>{t('node.hostTerminal')}</span>
           </Button>
-          <Button variant="destructive" onClick={promptDeleteNode} title={t('node.deleteNode')}>
+          <Button variant="destructive" size="sm" onClick={promptDeleteNode} title={t('node.deleteNode')}>
             <Trash2 className="size-4 mr-1.5" />
             <span>{t('node.deleteNode')}</span>
           </Button>
-          <Button onClick={onOpenCreateLXD}>
+          <Button size="sm" onClick={onOpenCreateLXD}>
             <Plus className="size-4 mr-1.5" />
             <span>{t('node.createLxd')}</span>
           </Button>
@@ -214,57 +214,62 @@ export function NodeLXDsPage() {
       </div>
 
       {/* Node Health Quick Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 font-mono text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-mono text-xs">
         <Card className="p-4 space-y-1">
           <p className="text-[11px] text-muted-foreground uppercase">{t('node.internalIp')}</p>
           <p className="text-base font-bold text-foreground">{targetNode?.ip || '127.0.0.1'}</p>
-        </Card>
-        <Card className="p-4 space-y-1">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] text-muted-foreground uppercase">{t('node.customEndpoint')}</p>
-            {!isEditingDomain && (
-              <Button variant="ghost" size="icon" className="size-5 text-muted-foreground hover:text-primary" title={t('node.customEndpoint')} onClick={() => { setCustomDomainInput(targetNode?.custom_ip_domain || ''); setIsEditingDomain(true); }}>
-                <Edit2 className="size-3" />
-              </Button>
-            )}
-          </div>
-          {isEditingDomain ? (
-            <div className="flex items-center gap-1 mt-1">
-              <Input
-                type="text"
-                value={customDomainInput}
-                onChange={(e) => setCustomDomainInput(e.target.value)}
-                placeholder={t('node.domainPlaceholder')}
-                className="h-7 text-xs font-mono"
-                autoFocus
-              />
-              <Button size="icon" className="size-7" onClick={handleUpdateDomain} disabled={domainLoading}>
-                {domainLoading ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
-              </Button>
-              <Button variant="ghost" size="icon" className="size-7" onClick={() => setIsEditingDomain(false)} disabled={domainLoading}>
-                <X className="size-3" />
-              </Button>
-            </div>
-          ) : (
-            <p className="text-base font-bold text-emerald-400 truncate" title={targetNode?.custom_ip_domain || '—'}>
-              {targetNode?.custom_ip_domain || t('node.notSet')}
-            </p>
-          )}
+          <p className="text-[10px] text-muted-foreground">{t('node.wireguardSubnet')}</p>
         </Card>
         <Card className="p-4 space-y-1">
           <p className="text-[11px] text-muted-foreground uppercase">{t('node.ramUsage')}</p>
           <p className="text-base font-bold text-purple-400">
-            {targetNode ? t('node.gb', { used: (targetNode.ram_used_mb / 1024).toFixed(1), total: (targetNode.ram_total_mb / 1024).toFixed(1) }) : '—'}
+            {targetNode?.ram_used_mb || 0} / {targetNode?.ram_total_mb || 0} MB
           </p>
+          <p className="text-[10px] text-muted-foreground">{t('node.memorySub')}</p>
         </Card>
         <Card className="p-4 space-y-1">
-          <p className="text-[11px] text-muted-foreground uppercase">{t('node.activeLxds')}</p>
-          <p className="text-base font-bold text-primary">{t('dash.lxds', { n: nodeLXDs.length })}</p>
+          <p className="text-[11px] text-muted-foreground uppercase">{t('node.uptime')}</p>
+          <p className="text-base font-bold text-foreground">{targetNode?.uptime || '0m'}</p>
+          <p className="text-[10px] text-muted-foreground">{t('node.lastPing', { time: targetNode?.last_ping ? new Date(targetNode.last_ping).toLocaleTimeString() : 'N/A' })}</p>
+        </Card>
+        <Card className="p-4 space-y-1">
+          <p className="text-[11px] text-muted-foreground uppercase">{t('node.activeContainers')}</p>
+          <p className="text-base font-bold text-emerald-400">{nodeLXDs.length} Instances</p>
+          <p className="text-[10px] text-muted-foreground">{t('node.containersSub')}</p>
         </Card>
       </div>
 
-      {/* Tab Bar */}
-      <Card className="p-1 flex border-border bg-card font-medium text-xs">
+      {/* Custom IP / Public Domain Override Card */}
+      <Card className="p-4 space-y-3 bg-secondary/20 border-border">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-bold text-foreground flex items-center gap-2">
+              <span>🌐 {t('node.customDomainTitle')}</span>
+              {targetNode?.custom_ip_domain && <Badge variant="success" className="text-[10px] py-0">{t('node.customDomainActive')}</Badge>}
+            </h3>
+            <p className="text-[11px] text-muted-foreground">
+              {t('node.customDomainDesc')}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Input
+              type="text"
+              placeholder={t('node.customDomainPlaceholder')}
+              value={customDomainInput}
+              onChange={(e) => setCustomDomainInput(e.target.value)}
+              className="h-8 text-xs font-mono w-full sm:w-64"
+            />
+            <Button size="sm" className="h-8 text-xs" onClick={handleSaveCustomDomain} disabled={domainLoading}>
+              {domainLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5 mr-1" />}
+              <span>{t('common.save')}</span>
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Main Tabs Navigation */}
+      <Card className="p-1.5 flex gap-1 font-sans text-xs bg-background/50 border-border">
         <button
           onClick={() => setActiveTab('containers')}
           className={`flex-1 py-2.5 rounded-md transition font-medium text-center flex items-center justify-center gap-1.5 ${activeTab === 'containers' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
@@ -284,7 +289,7 @@ export function NodeLXDsPage() {
       {/* Tab: LXD Containers */}
       <div className={activeTab === 'containers' ? 'block space-y-4' : 'hidden'}>
         {/* Search */}
-        <Card className="p-3.5 flex items-center justify-between gap-3">
+        <Card className="p-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
             <Layers className="size-4 text-primary" />
             <span>{t('node.lxdContainers', { n: filteredLXDs.length })}</span>

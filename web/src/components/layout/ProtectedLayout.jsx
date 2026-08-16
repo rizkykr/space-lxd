@@ -15,6 +15,7 @@ export function ProtectedLayout({ user, onLogout }) {
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [showCreateLXDModal, setShowCreateLXDModal] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [joinTokenData, setJoinTokenData] = useState(null);
   const [toasts, setToasts] = useState([]);
 
@@ -99,8 +100,29 @@ export function ProtectedLayout({ user, onLogout }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
-      {/* Sidebar Navigation */}
-      <Sidebar nodes={nodes} />
+      {/* Desktop Persistent Sidebar Navigation */}
+      <Sidebar nodes={nodes} className="hidden md:flex" />
+
+      {/* Mobile Off-Canvas Canvas Sidebar Drawer */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex animate-fade-in">
+          {/* Backdrop Blur Overlay */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileNavOpen(false)}
+          />
+
+          {/* Sliding Canvas Drawer */}
+          <div className="relative flex-1 flex flex-col max-w-[280px] w-full bg-card border-r border-border shadow-2xl z-50 animate-slide-right">
+            <Sidebar
+              nodes={nodes}
+              onNavigate={() => setMobileNavOpen(false)}
+              onClose={() => setMobileNavOpen(false)}
+              isMobile
+            />
+          </div>
+        </div>
+      )}
 
       {/* Main Content Viewport */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -109,15 +131,16 @@ export function ProtectedLayout({ user, onLogout }) {
           nodesCount={nodes.length}
           onLogout={onLogout}
           onRefresh={fetchNodes}
+          onToggleMobileNav={() => setMobileNavOpen(prev => !prev)}
         />
 
-        <main className="flex-1 p-6 sm:p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           <Outlet context={{ nodes, fetchNodes, addToast, onOpenAddNode: handleOpenAddNode, onOpenCreateLXD: () => setShowCreateLXDModal(true) }} />
         </main>
       </div>
 
       {/* Floating Toast Notification Stack */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
+      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full px-4 sm:px-0">
         {toasts.map(toast => (
           <div
             key={toast.id}

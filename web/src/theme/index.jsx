@@ -51,6 +51,19 @@ export function ThemeProvider({ children }) {
   const setTheme = (newTheme) => {
     setThemeState(newTheme);
     localStorage.setItem('lxd_theme', newTheme);
+
+    // Sync theme to backend database in background if authenticated
+    const token = localStorage.getItem('lxd_token');
+    if (token) {
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ theme: newTheme })
+      }).catch(() => {});
+    }
   };
 
   return (

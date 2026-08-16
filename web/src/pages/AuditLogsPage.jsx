@@ -19,7 +19,7 @@ export function AuditLogsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-foreground tracking-tight">{t('logs.title')}</h1>
           <p className="text-xs text-muted-foreground">{t('logs.subtitle')}</p>
@@ -28,7 +28,7 @@ export function AuditLogsPage() {
         <Select
           value={filterAction}
           onChange={e => setFilterAction(e.target.value)}
-          className="w-auto"
+          className="w-full sm:w-auto"
         >
           {uniqueActions.map(act => (
             <option key={act} value={act}>

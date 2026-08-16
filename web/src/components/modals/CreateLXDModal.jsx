@@ -516,7 +516,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                     <span className="font-mono text-primary font-bold">{t('wizard.ramValue', { n: form.ram_gb })}</span>
                   </label>
 
-                  <div className="grid grid-cols-6 gap-1.5">
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                     {[1, 2, 4, 8, 16].map(ram => (
                       <button
                         key={ram}
@@ -574,7 +574,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                     <span className="font-mono text-amber-400 font-bold">{t('wizard.coreValue', { n: form.cpu_cores })}</span>
                   </label>
 
-                  <div className="grid grid-cols-5 gap-1.5">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                     {[1, 2, 4, 8].map(core => (
                       <button
                         key={core}
@@ -632,7 +632,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                     <span className="font-mono text-cyan-400 font-bold">{t('wizard.diskValue', { n: form.disk_gb })}</span>
                   </label>
 
-                  <div className="grid grid-cols-5 gap-1.5">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                     {[10, 20, 50, 100].map(disk => (
                       <button
                         key={disk}

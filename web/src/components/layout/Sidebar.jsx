@@ -1,30 +1,47 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, LineChart, Server, Key, Activity, User as UserIcon, Settings
+  LayoutDashboard, LineChart, Server, Key, Activity, User as UserIcon, Settings, X
 } from 'lucide-react';
 import { Badge } from '../ui/primitives';
 import { useI18n } from '../../i18n';
 
-export function Sidebar({ nodes = [] }) {
+export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMobile = false }) {
   const { t } = useI18n();
 
+  const handleLinkClick = () => {
+    if (onNavigate) onNavigate();
+  };
+
   return (
-    <aside className="w-64 bg-card border-r border-border flex flex-col justify-between shrink-0 sticky top-0 h-screen z-20">
+    <aside className={`w-64 bg-card border-r border-border flex flex-col justify-between shrink-0 sticky top-0 h-screen z-20 ${className}`}>
       <div>
         {/* Logo Brand Header */}
-        <div className="h-16 px-5 border-b border-border flex items-center gap-3 bg-card">
-          <div className="size-9 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center text-lg shadow-xs shrink-0">
-            🪐
+        <div className="h-16 px-5 border-b border-border flex items-center justify-between bg-card">
+          <div className="flex items-center gap-3">
+            <div className="size-9 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center text-lg shadow-xs shrink-0">
+              🪐
+            </div>
+            <div>
+              <h1 className="font-bold text-sm text-foreground tracking-tight">{t('app.name')}</h1>
+              <p className="text-[10px] font-mono text-muted-foreground">{t('nav.version')}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-sm text-foreground tracking-tight">{t('app.name')}</h1>
-            <p className="text-[10px] font-mono text-muted-foreground">{t('nav.version')}</p>
-          </div>
+
+          {isMobile && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+              aria-label="Close sidebar"
+            >
+              <X className="size-4" />
+            </button>
+          )}
         </div>
 
         {/* Navigation Links with Clean Spacing & Categories */}
-        <nav className="p-3 flex flex-col gap-5 font-sans">
+        <nav className="p-3 flex flex-col gap-5 font-sans overflow-y-auto max-h-[calc(100vh-140px)] scrollbar-none">
           {/* Group 1: Main Platform */}
           <div className="flex flex-col gap-1">
             <p className="px-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest font-bold mb-1">
@@ -34,6 +51,7 @@ export function Sidebar({ nodes = [] }) {
             <NavLink
               to="/"
               end
+              onClick={handleLinkClick}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   isActive
@@ -48,6 +66,7 @@ export function Sidebar({ nodes = [] }) {
 
             <NavLink
               to="/monitoring"
+              onClick={handleLinkClick}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   isActive
@@ -62,6 +81,7 @@ export function Sidebar({ nodes = [] }) {
 
             <NavLink
               to="/nodes"
+              onClick={handleLinkClick}
               className={({ isActive }) =>
                 `flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   isActive
@@ -86,6 +106,7 @@ export function Sidebar({ nodes = [] }) {
 
             <NavLink
               to="/templates"
+              onClick={handleLinkClick}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   isActive
@@ -100,6 +121,7 @@ export function Sidebar({ nodes = [] }) {
 
             <NavLink
               to="/logs"
+              onClick={handleLinkClick}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   isActive
@@ -121,6 +143,7 @@ export function Sidebar({ nodes = [] }) {
 
             <NavLink
               to="/profile"
+              onClick={handleLinkClick}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   isActive
@@ -135,6 +158,7 @@ export function Sidebar({ nodes = [] }) {
 
             <NavLink
               to="/settings"
+              onClick={handleLinkClick}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   isActive
@@ -151,7 +175,7 @@ export function Sidebar({ nodes = [] }) {
       </div>
 
       {/* Sidebar Footer */}
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border bg-card">
         <div className="flex items-center justify-between bg-background p-2.5 rounded-lg border border-border">
           <div className="flex items-center gap-2.5">
             <div className="size-8 rounded-full bg-secondary border border-border text-foreground flex items-center justify-center text-xs font-mono font-bold">

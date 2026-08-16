@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Badge } from '../ui/primitives';
-import { LogOut, RefreshCw, ArrowUpCircle, CheckCircle2, Loader2, X, Sun, Moon, Monitor } from 'lucide-react';
+import { LogOut, RefreshCw, ArrowUpCircle, CheckCircle2, Loader2, X, Sun, Moon, Monitor, Menu } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
 
-export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh }) {
+export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh, onToggleMobileNav }) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
   const [versionInfo, setVersionInfo] = useState(null);
@@ -91,35 +91,47 @@ export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh }) {
 
   return (
     <>
-      <header className="h-16 px-6 border-b border-border bg-card/60 backdrop-blur flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
-            <span className="size-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="font-semibold text-foreground">{t('header.master')}</span>
-            <Badge variant="outline" className="ml-1">
-              {t('header.nodes', { n: nodesCount })}
+      <header className="h-16 px-4 sm:px-6 border-b border-border bg-card/60 backdrop-blur flex items-center justify-between sticky top-0 z-10">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {/* Mobile Hamburger Button */}
+          <button
+            type="button"
+            onClick={onToggleMobileNav}
+            className="md:hidden p-1.5 rounded-lg border border-border text-foreground hover:bg-accent/50 transition-colors shrink-0"
+            aria-label="Toggle navigation drawer"
+          >
+            <Menu className="size-4" />
+          </button>
+
+          <div className="flex items-center gap-1.5 sm:gap-2 font-mono text-xs text-muted-foreground truncate">
+            <span className="size-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+            <span className="font-semibold text-foreground hidden sm:inline">{t('header.master')}</span>
+            <span className="font-semibold text-foreground sm:hidden">Master</span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+              {nodesCount} {nodesCount === 1 ? 'Node' : 'Nodes'}
             </Badge>
           </div>
 
           {versionInfo?.has_update && (
             <button
               onClick={() => setShowUpdateModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-full hover:bg-amber-500/20 transition-all animate-pulse"
+              className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-mono font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-full hover:bg-amber-500/20 transition-all animate-pulse truncate"
             >
-              <ArrowUpCircle className="size-3.5" />
-              <span>{t('header.updateAvailable', { v: versionInfo.latest_commit })}</span>
+              <ArrowUpCircle className="size-3.5 shrink-0" />
+              <span className="hidden sm:inline">{t('header.updateAvailable', { v: versionInfo.latest_commit })}</span>
+              <span className="sm:hidden">Update</span>
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {/* Theme Switcher: System | Dark | Light */}
-          <div className="flex items-center bg-secondary/60 p-1 rounded-lg border border-border" title={t('theme.switch')}>
+          <div className="flex items-center bg-secondary/60 p-0.5 sm:p-1 rounded-lg border border-border" title={t('theme.switch')}>
             <button
               type="button"
               onClick={() => setTheme('system')}
               title={t('theme.system')}
-              className={`px-2 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+              className={`px-1.5 sm:px-2 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1 ${
                 theme === 'system'
                   ? 'bg-primary text-primary-foreground shadow-xs font-bold'
                   : 'text-muted-foreground hover:text-foreground'
@@ -132,7 +144,7 @@ export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh }) {
               type="button"
               onClick={() => setTheme('dark')}
               title={t('theme.dark')}
-              className={`px-2 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+              className={`px-1.5 sm:px-2 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1 ${
                 theme === 'dark'
                   ? 'bg-primary text-primary-foreground shadow-xs font-bold'
                   : 'text-muted-foreground hover:text-foreground'
@@ -145,7 +157,7 @@ export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh }) {
               type="button"
               onClick={() => setTheme('light')}
               title={t('theme.light')}
-              className={`px-2 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+              className={`px-1.5 sm:px-2 py-1 rounded text-[11px] font-medium transition-all flex items-center gap-1 ${
                 theme === 'light'
                   ? 'bg-primary text-primary-foreground shadow-xs font-bold'
                   : 'text-muted-foreground hover:text-foreground'
@@ -160,10 +172,10 @@ export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh }) {
             <RefreshCw className="size-3.5 text-muted-foreground" />
           </Button>
 
-          <div className="h-4 w-px bg-border mx-0.5"></div>
+          <div className="h-4 w-px bg-border mx-0.5 hidden sm:block"></div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-foreground font-bold">{user?.username || 'admin'}</span>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="text-xs font-mono text-foreground font-bold hidden sm:inline">{user?.username || 'admin'}</span>
             <Button variant="ghost" size="icon" className="size-8" onClick={onLogout} title={t('header.logout')}>
               <LogOut className="size-4 text-destructive" />
             </Button>

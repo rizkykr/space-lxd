@@ -32,14 +32,8 @@ export function SettingsPage() {
           ...data,
           master_public_url: data.master_public_url || window.location.origin,
           language: data.language || lang || 'en',
-          theme: data.theme || theme || 'system'
+          theme: theme || data.theme || 'system'
         }));
-        if (data.language && data.language !== lang) {
-          setLanguage(data.language);
-        }
-        if (data.theme && data.theme !== theme) {
-          setTheme(data.theme);
-        }
       }
     } catch (e) {
       console.error(e);
@@ -127,13 +121,13 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Vertical Tabs Layout Structure */}
+      {/* Vertical/Horizontal Tabs Layout Structure */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
-        {/* Left Vertical Tabs Navigation */}
-        <Card className="p-2 space-y-1 font-sans text-xs">
+        {/* Responsive Tabs Navigation */}
+        <Card className="p-2 flex md:flex-col overflow-x-auto gap-1 font-sans text-xs shrink-0 scrollbar-none">
           <button
             onClick={() => setActiveTab('system')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-all ${
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md text-left transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'system'
                 ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -145,7 +139,7 @@ export function SettingsPage() {
 
           <button
             onClick={() => setActiveTab('timezone')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md font-medium text-left transition-all ${
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md font-medium text-left transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'timezone'
                 ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -157,7 +151,7 @@ export function SettingsPage() {
 
           <button
             onClick={() => setActiveTab('resources')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-all ${
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md text-left transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'resources'
                 ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -169,7 +163,7 @@ export function SettingsPage() {
 
           <button
             onClick={() => setActiveTab('language')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-all ${
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md text-left transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'language'
                 ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -181,7 +175,7 @@ export function SettingsPage() {
 
           <button
             onClick={() => setActiveTab('theme')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-all ${
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md text-left transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'theme'
                 ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
