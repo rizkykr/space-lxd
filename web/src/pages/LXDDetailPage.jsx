@@ -268,18 +268,20 @@ export function LXDDetailPage() {
             </span>
             <ChevronRight className="size-3" />
             <span className="cursor-pointer hover:underline text-primary" onClick={() => navigate(`/nodes/${nodeId}`)}>
-              {t('detail.breadcrumbNode', { name: targetNode?.name || nodeId })}
+              {targetNode?.name || nodeId}
             </span>
             <ChevronRight className="size-3" />
-            <span className="text-foreground font-bold">{lxdName}</span>
+            <span className="text-foreground font-semibold">{lxdName}</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-3">
-            <span>{lxdName}</span>
-            <Badge variant={isRunning ? 'success' : isFrozen ? 'warning' : 'secondary'}>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
+              <span className={`size-2.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse' : isFrozen ? 'bg-amber-400' : 'bg-muted-foreground'}`}></span>
+              <span>{lxdName}</span>
+            </h1>
+            <Badge variant={isRunning ? 'success' : isFrozen ? 'warning' : 'secondary'} className="text-[10px]">
               {lxdItem.status.toUpperCase()}
             </Badge>
-            <Badge variant="info">{t('detail.typeContainer')}</Badge>
-          </h1>
+          </div>
         </div>
 
         {/* Action Toolbar */}

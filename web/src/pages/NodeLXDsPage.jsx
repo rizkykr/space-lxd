@@ -162,9 +162,10 @@ export function NodeLXDsPage() {
               {t('nodes.title')}
             </span>
             <ChevronRight className="size-3" />
-            <span className="text-foreground font-bold">{targetNode?.name || nodeId}</span>
+            <span className="text-foreground font-semibold">{targetNode?.name || nodeId}</span>
           </div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
+
+          <div className="flex items-center gap-3">
             {isEditingName ? (
               <div className="flex items-center gap-2">
                 <Input
@@ -184,17 +185,25 @@ export function NodeLXDsPage() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span>{t('node.title', { name: targetNode?.name || nodeId })}</span>
-                <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-primary" title={t('nodes.renameNode')} onClick={() => { setNodeNewName(targetNode?.name || ''); setIsEditingName(true); }}>
+                <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
+                  <span className={`size-2.5 rounded-full ${targetNode?.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground'}`}></span>
+                  <span>{targetNode?.name || nodeId}</span>
+                </h1>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-muted-foreground hover:text-primary"
+                  title={t('nodes.renameNode')}
+                  onClick={() => { setNodeNewName(targetNode?.name || ''); setIsEditingName(true); }}
+                >
                   <Edit2 className="size-3.5" />
                 </Button>
               </div>
             )}
-            {targetNode?.is_master ? <Badge variant="info">{t('node.masterNode')}</Badge> : <Badge variant="secondary">{t('node.workerNode')}</Badge>}
-            <Badge variant={targetNode?.status === 'online' ? 'success' : 'secondary'}>
-              {targetNode?.status?.toUpperCase() || t('common.online')}
+            <Badge variant={targetNode?.is_master ? 'info' : 'secondary'} className="text-[10px]">
+              {targetNode?.is_master ? t('common.master') : t('common.worker')}
             </Badge>
-          </h1>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -260,7 +269,7 @@ export function NodeLXDsPage() {
               onChange={(e) => setCustomDomainInput(e.target.value)}
               className="h-8 text-xs font-mono w-full sm:w-64"
             />
-            <Button size="sm" className="h-8 text-xs" onClick={handleSaveCustomDomain} disabled={domainLoading}>
+            <Button size="sm" className="h-8 text-xs" onClick={handleUpdateDomain} disabled={domainLoading}>
               {domainLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5 mr-1" />}
               <span>{t('common.save')}</span>
             </Button>

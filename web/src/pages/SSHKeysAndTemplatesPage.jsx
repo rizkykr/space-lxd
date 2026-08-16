@@ -53,8 +53,10 @@ export function SSHKeysAndTemplatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-foreground tracking-tight">{t('keys.title')}</h1>
-        <p className="text-xs text-muted-foreground">{t('keys.subtitle')}</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+          {t('keys.title')}
+        </h1>
+        <p className="text-xs text-muted-foreground mt-1">{t('keys.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

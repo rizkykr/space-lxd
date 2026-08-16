@@ -43,15 +43,14 @@ export function NodesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
-            <span>{t('nodes.title')}</span>
-            <Badge variant="success">🌐 {t('nodes.badge')}</Badge>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+            {t('nodes.title')}
           </h1>
-          <p className="text-xs text-muted-foreground">{t('nodes.subtitle')}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t('nodes.subtitle')}</p>
         </div>
-        <Button onClick={onOpenAddNode}>
+        <Button onClick={onOpenAddNode} className="w-full sm:w-auto">
           <Plus className="size-4 mr-1.5" />
           <span>{t('nodes.add')}</span>
         </Button>

@@ -32,11 +32,10 @@ export function DashboardPage() {
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-3">
-            <span>{t('dash.title')}</span>
-            <Badge variant="success">{t('dash.active')}</Badge>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+            {t('dash.title')}
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{t('dash.subtitle')}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t('dash.subtitle')}</p>
         </div>
 
         <div className="flex items-center gap-2">

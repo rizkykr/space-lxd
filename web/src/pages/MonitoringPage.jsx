@@ -71,11 +71,10 @@ export function MonitoringPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
-            <LineChart className="size-5 text-emerald-400" />
-            <span>{t('mon.title')}</span>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+            {t('mon.title')}
           </h1>
-          <p className="text-xs text-muted-foreground">{t('mon.subtitle')}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t('mon.subtitle')}</p>
         </div>
 
         <Select

@@ -40,8 +40,10 @@ export function ProfilePage({ user }) {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-xl font-bold text-foreground tracking-tight">{t('profile.title')}</h1>
-        <p className="text-xs text-muted-foreground">{t('profile.subtitle')}</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+          {t('profile.title')}
+        </h1>
+        <p className="text-xs text-muted-foreground mt-1">{t('profile.subtitle')}</p>
       </div>
 
       <Card className="p-6 space-y-6">

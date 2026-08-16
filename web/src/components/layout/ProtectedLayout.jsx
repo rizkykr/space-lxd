@@ -52,7 +52,7 @@ export function ProtectedLayout({ user, onLogout }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Realtime cluster state push from master WebSocket (best-effort, no-op on failure)
+  // Realtime cluster state push from master WebSocket
   useEffect(() => {
     let socket;
     let retryTimer;
@@ -103,7 +103,7 @@ export function ProtectedLayout({ user, onLogout }) {
       {/* Desktop Persistent Sidebar Navigation */}
       <Sidebar nodes={nodes} className="hidden md:flex" />
 
-      {/* Mobile Off-Canvas Canvas Sidebar Drawer */}
+      {/* Mobile Off-Canvas Canvas Sidebar Drawer (Single Clean Edge-to-Edge Layer) */}
       {mobileNavOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex animate-fade-in">
           {/* Backdrop Blur Overlay */}
@@ -113,7 +113,7 @@ export function ProtectedLayout({ user, onLogout }) {
           />
 
           {/* Sliding Canvas Drawer */}
-          <div className="relative flex-1 flex flex-col max-w-[280px] w-full bg-card border-r border-border shadow-2xl z-50 animate-slide-right">
+          <div className="relative w-72 max-w-[80vw] h-full bg-card shadow-2xl z-50 animate-slide-right flex flex-col border-r border-border overflow-hidden">
             <Sidebar
               nodes={nodes}
               onNavigate={() => setMobileNavOpen(false)}
@@ -135,7 +135,15 @@ export function ProtectedLayout({ user, onLogout }) {
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-          <Outlet context={{ nodes, fetchNodes, addToast, onOpenAddNode: handleOpenAddNode, onOpenCreateLXD: () => setShowCreateLXDModal(true) }} />
+          <Outlet
+            context={{
+              nodes,
+              fetchNodes,
+              addToast,
+              onOpenAddNode: handleOpenAddNode,
+              onOpenCreateLXD: () => setShowCreateLXDModal(true)
+            }}
+          />
         </main>
       </div>
 
@@ -166,7 +174,12 @@ export function ProtectedLayout({ user, onLogout }) {
       )}
 
       {showCreateLXDModal && (
-        <CreateLXDModal nodes={nodes} onClose={() => setShowCreateLXDModal(false)} onRefresh={fetchNodes} addToast={addToast} />
+        <CreateLXDModal
+          nodes={nodes}
+          onClose={() => setShowCreateLXDModal(false)}
+          onRefresh={fetchNodes}
+          addToast={addToast}
+        />
       )}
     </div>
   );

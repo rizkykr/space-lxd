@@ -14,10 +14,14 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
   };
 
   return (
-    <aside className={`w-64 bg-card border-r border-border flex flex-col justify-between shrink-0 sticky top-0 h-screen z-20 ${className}`}>
-      <div>
+    <aside
+      className={`bg-card flex flex-col justify-between shrink-0 ${
+        isMobile ? 'w-full h-full border-none' : 'w-64 border-r border-border sticky top-0 h-screen z-20'
+      } ${className}`}
+    >
+      <div className="flex flex-col flex-1 min-h-0">
         {/* Logo Brand Header */}
-        <div className="h-16 px-5 border-b border-border flex items-center justify-between bg-card">
+        <div className="h-16 px-5 border-b border-border flex items-center justify-between bg-card shrink-0">
           <div className="flex items-center gap-3">
             <div className="size-9 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center text-lg shadow-xs shrink-0">
               🪐
@@ -40,8 +44,8 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
           )}
         </div>
 
-        {/* Navigation Links with Clean Spacing & Categories */}
-        <nav className="p-3 flex flex-col gap-5 font-sans overflow-y-auto max-h-[calc(100vh-140px)] scrollbar-none">
+        {/* Navigation Links */}
+        <nav className="p-3 flex flex-col gap-5 font-sans overflow-y-auto flex-1 scrollbar-none">
           {/* Group 1: Main Platform */}
           <div className="flex flex-col gap-1">
             <p className="px-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest font-bold mb-1">
@@ -53,7 +57,7 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
               end
               onClick={handleLinkClick}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-md text-xs font-medium transition-all ${
                   isActive
                     ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -68,7 +72,7 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
               to="/monitoring"
               onClick={handleLinkClick}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-md text-xs font-medium transition-all ${
                   isActive
                     ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -83,7 +87,7 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
               to="/nodes"
               onClick={handleLinkClick}
               className={({ isActive }) =>
-                `flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                `flex items-center justify-between px-3 py-2.5 rounded-md text-xs font-medium transition-all ${
                   isActive
                     ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -108,7 +112,7 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
               to="/templates"
               onClick={handleLinkClick}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-md text-xs font-medium transition-all ${
                   isActive
                     ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -123,7 +127,7 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
               to="/logs"
               onClick={handleLinkClick}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-md text-xs font-medium transition-all ${
                   isActive
                     ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -145,7 +149,7 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
               to="/profile"
               onClick={handleLinkClick}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-md text-xs font-medium transition-all ${
                   isActive
                     ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -160,7 +164,7 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
               to="/settings"
               onClick={handleLinkClick}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-md text-xs font-medium transition-all ${
                   isActive
                     ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -175,7 +179,7 @@ export function Sidebar({ nodes = [], className = '', onNavigate, onClose, isMob
       </div>
 
       {/* Sidebar Footer */}
-      <div className="p-4 border-t border-border bg-card">
+      <div className="p-4 border-t border-border bg-card shrink-0">
         <div className="flex items-center justify-between bg-background p-2.5 rounded-lg border border-border">
           <div className="flex items-center gap-2.5">
             <div className="size-8 rounded-full bg-secondary border border-border text-foreground flex items-center justify-center text-xs font-mono font-bold">

@@ -91,11 +91,10 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
-          <span>{t('settings.title')}</span>
-          <Badge variant="success">{t('settings.engineOnline')}</Badge>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+          {t('settings.title')}
         </h1>
-        <p className="text-xs text-muted-foreground">{t('settings.subtitle')}</p>
+        <p className="text-xs text-muted-foreground mt-1">{t('settings.subtitle')}</p>
       </div>
 
       {/* Domain Match Warning Banner */}
