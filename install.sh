@@ -156,48 +156,89 @@ install_lxd_package() {
   fi
 }
 
-# Best-performance auto-config: ZFS > LVM-thin > dir, plus managed NAT bridge.
-configure_lxd() {
-  # Wait until daemon socket is ready
+# Wait until the LXD daemon responds to CLI queries.
+wait_lxd_ready() {
   for _ in $(seq 1 30); do
-    LXD_SOCKET="$(detect_lxd_socket)"
-    [ -S "$LXD_SOCKET" ] && break
+    if lxc storage list >/dev/null 2>&1; then
+      return 0
+    fi
     sleep 1
   done
+  return 1
+}
 
-  # Storage pool (skip if already exists)
+# Best-performance, idempotent auto-config: verified storage, NAT/DHCP bridge,
+# and a default profile guaranteed to have eth0 on lxdbr0 (so containers get
+# an IP + DNS + internet out of the box).
+configure_lxd() {
+  LXD_SOCKET="$(detect_lxd_socket)"
+
+  if ! wait_lxd_ready; then
+    error "LXD daemon tidak merespons setelah 30 detik (socket: ${LXD_SOCKET}). Periksa: journalctl -u lxd"
+  fi
+
+  # ── 1. Storage pool (only when LXD is not initialized yet) ───────────────────
   if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
-    if command -v zfs >/dev/null 2>&1; then
-      info "Configuring ZFS storage pool (best performance)..."
-      lxd init --auto --storage-backend=zfs --storage-create-loop=10GB --storage-pool=default 2>/dev/null || true
-    fi
-    if ! lxc storage list --format=csv 2>/dev/null | grep -q . && command -v lvcreate >/dev/null 2>&1; then
-      info "Configuring LVM-thin storage pool (copy-on-write)..."
-      lxd init --auto --storage-backend=lvm --storage-create-loop=10GB --storage-pool=default 2>/dev/null || true
-    fi
-    if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
-      warn "ZFS/LVM unavailable, using dir storage fallback."
-      lxd init --auto 2>/dev/null || true
+    if command -v zfs >/dev/null 2>&1 && command -v zpool >/dev/null 2>&1 &&
+       lxd init --auto --storage-backend=zfs --storage-create-loop=10GB --storage-pool=default >/dev/null 2>&1 &&
+       lxc storage list --format=csv 2>/dev/null | grep -q .; then
+      info "LXD initialized with ZFS storage pool (best performance)."
+    elif command -v lvcreate >/dev/null 2>&1 &&
+         lxd init --auto --storage-backend=lvm --storage-create-loop=10GB --storage-pool=default >/dev/null 2>&1 &&
+         lxc storage list --format=csv 2>/dev/null | grep -q .; then
+      info "LXD initialized with LVM-thin storage pool (copy-on-write)."
+    else
+      warn "ZFS/LVM tidak tersedia atau gagal; menginisialisasi LXD dengan storage default (dir)."
+      if ! lxd init --auto; then
+        error "Gagal menginisialisasi LXD (lxd init --auto). Periksa daemon LXD."
+      fi
     fi
   fi
 
-  # Best-performance defaults: ZFS compression & no swap thrashing
+  if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
+    error "LXD tidak memiliki storage pool. Periksa daemon LXD."
+  fi
+
+  # ── 2. Managed bridge with NAT + DHCP (auto subnet, avoids collisions) ────────
+  if ! lxc network show lxdbr0 >/dev/null 2>&1; then
+    info "Membuat managed bridge 'lxdbr0' (NAT + DHCP + DNS)..."
+    if ! lxc network create lxdbr0 \
+        ipv4.address=auto \
+        ipv4.nat=true \
+        ipv4.dhcp=true \
+        ipv6.address=auto \
+        ipv6.nat=true \
+        dns.mode=managed; then
+      error "Gagal membuat network 'lxdbr0'. Periksa daemon LXD."
+    fi
+  fi
+
+  # Repair an existing lxdbr0: ensure NAT + DHCP + managed DNS (idempotent)
+  lxc network set lxdbr0 ipv4.nat=true 2>/dev/null || true
+  lxc network set lxdbr0 ipv4.dhcp=true 2>/dev/null || true
+  lxc network set lxdbr0 dns.mode=managed 2>/dev/null || true
+
+  # ── 3. Default profile MUST have eth0 pointing to lxdbr0 ─────────────────────
+  if ! lxc profile device get default eth0 parent 2>/dev/null | grep -qx lxdbr0; then
+    lxc profile device remove default eth0 >/dev/null 2>&1 || true
+    lxc profile device add default eth0 nictype=bridged parent=lxdbr0 name=eth0
+  fi
+
+  # ── 4. Best-performance tuning (best-effort) ──────────────────────────────────
   lxc storage set default zfs.compression=on 2>/dev/null || true
   lxc profile set default limits.memory.swap=false 2>/dev/null || true
 
-  # Managed bridge with unique subnet (avoid cross-node collision)
-  if ! lxc network show lxdbr0 >/dev/null 2>&1; then
-    NODE_HASH=$(cksum <<< "$(hostname)" | awk '{print $1}')
-    SUBNET_OCTET=$(( (NODE_HASH % 200) + 10 ))
-    lxc network create lxdbr0 ipv4.address="10.171.${SUBNET_OCTET}.1/24" ipv4.nat=true ipv6.address=none 2>/dev/null || true
-    lxc profile device add default eth0 nictype=bridged parent=lxdbr0 name=eth0 2>/dev/null || true
-    info "LXD virtual bridge 'lxdbr0' initialized (10.171.${SUBNET_OCTET}.1/24 NAT)."
-  fi
-
-  # Kernel IPv4 forwarding for cross-node routing
+  # ── 5. Kernel IPv4 forwarding for NAT & cross-node routing ────────────────────
   sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
   if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
     echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+  fi
+
+  # ── 6. Self-check ─────────────────────────────────────────────────────────────
+  if lxc profile device get default eth0 parent 2>/dev/null | grep -qx lxdbr0; then
+    info "Jaringan LXD siap: lxdbr0 (NAT+DHCP+DNS) + default profile eth0 ✓"
+  else
+    warn "Profile 'default' tidak memiliki eth0 di lxdbr0 — container mungkin tanpa jaringan."
   fi
 }
 

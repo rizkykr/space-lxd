@@ -61,9 +61,10 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
     fetch('/api/networks')
       .then(r => r.json())
       .then(data => {
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length) {
           setNetworks(data);
-          setForm(prev => ({ ...prev, network: prev.network || (data[0]?.name || 'lxdbr0') }));
+          const preferred = data.find(n => n.name === 'lxdbr0') || data[0];
+          setForm(prev => ({ ...prev, network: prev.network || preferred.name }));
         }
       })
       .catch(console.error);

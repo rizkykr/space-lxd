@@ -80,41 +80,71 @@ else
   echo "${GRN}✓ LXD Daemon terdeteksi (${LXC_VER}).${R}"
 fi
 
-# ── Best-Performance Storage Pool (ZFS > LVM-thin > dir) ─────────────────────────
+# ── Best-Performance Storage Pool (ZFS > LVM-thin > dir, verified) ──────────────
 if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
-  if command -v zfs &>/dev/null; then
-    echo "${CYN}⚙ Configuring ZFS storage pool (best performance)...${R}"
-    lxd init --auto --storage-backend=zfs --storage-create-loop=10GB --storage-pool=default 2>/dev/null || true
+  if command -v zfs >/dev/null 2>&1 && command -v zpool >/dev/null 2>&1 &&
+     lxd init --auto --storage-backend=zfs --storage-create-loop=10GB --storage-pool=default >/dev/null 2>&1 &&
+     lxc storage list --format=csv 2>/dev/null | grep -q .; then
+    echo "${CYN}⚙ LXD initialized with ZFS storage pool (best performance).${R}"
+  elif command -v lvcreate >/dev/null 2>&1 &&
+       lxd init --auto --storage-backend=lvm --storage-create-loop=10GB --storage-pool=default >/dev/null 2>&1 &&
+       lxc storage list --format=csv 2>/dev/null | grep -q .; then
+    echo "${CYN}⚙ LXD initialized with LVM-thin storage pool (copy-on-write).${R}"
+  else
+    echo "${YLW}⚠ ZFS/LVM unavailable or failed; initializing LXD with default (dir) storage.${R}"
+    if ! lxd init --auto; then
+      echo "${RED}✗ Gagal menginisialisasi LXD. Periksa daemon LXD.${R}"
+      exit 1
+    fi
   fi
-  if ! lxc storage list --format=csv 2>/dev/null | grep -q . && command -v lvcreate &>/dev/null; then
-    echo "${CYN}⚙ Configuring LVM-thin storage pool (copy-on-write)...${R}"
-    lxd init --auto --storage-backend=lvm --storage-create-loop=10GB --storage-pool=default 2>/dev/null || true
+fi
+
+if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
+  echo "${RED}✗ LXD tidak memiliki storage pool. Periksa daemon LXD.${R}"
+  exit 1
+fi
+
+# ── Managed bridge with NAT + DHCP (auto subnet, avoids collisions) ─────────────
+if ! lxc network show lxdbr0 >/dev/null 2>&1; then
+  echo "${CYN}⚡ Constructing managed bridge 'lxdbr0' (NAT + DHCP + DNS)...${R}"
+  if ! lxc network create lxdbr0 \
+      ipv4.address=auto \
+      ipv4.nat=true \
+      ipv4.dhcp=true \
+      ipv6.address=auto \
+      ipv6.nat=true \
+      dns.mode=managed; then
+    echo "${RED}✗ Gagal membuat network 'lxdbr0'. Periksa daemon LXD.${R}"
+    exit 1
   fi
-  if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
-    echo "${YLW}⚠ ZFS/LVM unavailable, using dir storage fallback.${R}"
-    lxd init --auto 2>/dev/null || true
-  fi
+fi
+
+# Repair an existing lxdbr0: ensure NAT + DHCP + managed DNS (idempotent)
+lxc network set lxdbr0 ipv4.nat=true 2>/dev/null || true
+lxc network set lxdbr0 ipv4.dhcp=true 2>/dev/null || true
+lxc network set lxdbr0 dns.mode=managed 2>/dev/null || true
+
+# ── Default profile MUST have eth0 pointing to lxdbr0 ──────────────────────────
+if ! lxc profile device get default eth0 parent 2>/dev/null | grep -qx lxdbr0; then
+  lxc profile device remove default eth0 >/dev/null 2>&1 || true
+  lxc profile device add default eth0 nictype=bridged parent=lxdbr0 name=eth0
 fi
 
 # ── Best-Performance Tuning: ZFS compression & no swap thrashing ──────────────
 lxc storage set default zfs.compression=on 2>/dev/null || true
 lxc profile set default limits.memory.swap=false 2>/dev/null || true
 
-# ── Ensure LXD Virtual Bridge & IP Forwarding (Best Practice Enterprise Isolation) ──
-if ! lxc network show lxdbr0 &>/dev/null; then
-  echo "${YLW}⚡ Constructing secure local LXD virtual bridge 'lxdbr0'...${R}"
-  # Generate unique 10.171.x.1/24 subnet based on hostname hash to avoid cross-node subnet collisions
-  NODE_HASH=$(cksum <<< "$NODE_NAME" | awk '{print $1}')
-  SUBNET_OCTET=$(( (NODE_HASH % 200) + 10 ))
-  lxc network create lxdbr0 ipv4.address="10.171.${SUBNET_OCTET}.1/24" ipv4.nat=true ipv6.address=none 2>/dev/null || true
-  lxc profile device add default eth0 nictype=bridged parent=lxdbr0 name=eth0 2>/dev/null || true
-  echo "${GRN}✓ LXD Virtual Subnet initialized (10.171.${SUBNET_OCTET}.1/24 NAT).${R}"
-fi
-
-# Enable Kernel IPv4 Forwarding for Cross-Node / Tailscale Mesh Routing
+# Enable Kernel IPv4 Forwarding for NAT / Cross-Node / Tailscale Mesh Routing
 sysctl -w net.ipv4.ip_forward=1 &>/dev/null || true
 if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
   echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+fi
+
+# Self-check
+if lxc profile device get default eth0 parent 2>/dev/null | grep -qx lxdbr0; then
+  echo "${GRN}✓ Jaringan LXD siap: lxdbr0 (NAT+DHCP+DNS) + default profile eth0.${R}"
+else
+  echo "${YLW}⚠ Profile 'default' tidak memiliki eth0 di lxdbr0 — container mungkin tanpa jaringan.${R}"
 fi
 
 # ── Step 0b: Buat Dedicated Service User ────────────────────────────────────────
