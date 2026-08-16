@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Button, Badge } from '../ui/primitives';
 import {
-  LogOut, RefreshCw, ArrowUpCircle, CheckCircle2, Loader2, X,
+  LogOut, ArrowUpCircle, CheckCircle2, Loader2, X,
   Sun, Moon, Monitor, Menu, ChevronDown, Check
 } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
 
-export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh, onToggleMobileNav }) {
+export function TopHeader({ user, nodesCount = 0, onLogout, onToggleMobileNav }) {
   const { t } = useI18n();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const location = useLocation();
@@ -235,10 +235,6 @@ export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh, onToggleM
               </div>
             )}
           </div>
-
-          <Button variant="outline" size="icon" className="size-8 rounded-lg" onClick={onRefresh} title={t('header.refresh')}>
-            <RefreshCw className="size-3.5 text-muted-foreground" />
-          </Button>
 
           <div className="h-4 w-px bg-border mx-0.5 hidden sm:block"></div>
 
