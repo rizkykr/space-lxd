@@ -160,10 +160,19 @@ quick_create() {
 clean_uninstall() {
   banner
   cd "$ROOT_DIR" 2>/dev/null || true
+  local SCRIPT=""
   if [ -f "${ROOT_DIR}/scripts/uninstall.sh" ]; then
-    bash "${ROOT_DIR}/scripts/uninstall.sh"
+    SCRIPT="${ROOT_DIR}/scripts/uninstall.sh"
   elif [ -f "./scripts/uninstall.sh" ]; then
-    bash ./scripts/uninstall.sh
+    SCRIPT="./scripts/uninstall.sh"
+  fi
+
+  if [ -n "$SCRIPT" ]; then
+    if [ "$EUID" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+      sudo bash "$SCRIPT"
+    else
+      bash "$SCRIPT"
+    fi
   else
     echo -e "${COLOR_RED}Skrip uninstall.sh tidak ditemukan di ${ROOT_DIR}.${COLOR_RESET}"
   fi

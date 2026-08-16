@@ -15,6 +15,16 @@ COLOR_DIM="\033[2m"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
 MASTER_URL="http://localhost:${PORT:-9090}"
 
+# ── Auto-elevate to root (sudo) ───────────────────────────────────────────────
+if [ "$EUID" -ne 0 ]; then
+  if command -v sudo >/dev/null 2>&1; then
+    exec sudo bash "$0" "$@"
+  else
+    echo -e "${COLOR_RED}[ERROR] Script uninstall harus dijalankan sebagai root (sudo bash $0)${COLOR_RESET}"
+    exit 1
+  fi
+fi
+
 info()    { echo -e "${COLOR_CYAN}[INFO]${COLOR_RESET} $1"; }
 warn()    { echo -e "${COLOR_YELLOW}[WARN]${COLOR_RESET} $1"; }
 success() { echo -e "${COLOR_GREEN}[OK]${COLOR_RESET}   $1"; }
