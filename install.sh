@@ -337,14 +337,23 @@ WorkingDirectory=${ROOT_DIR}
 Environment="PORT=${PORT}"
 Environment="HOME=${SPACE_HOME}"
 Environment="LXD_SOCKET=${LXD_SOCKET}"
+Environment="PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=${ROOT_DIR}/bin/lxd-manager-master
 Restart=always
-RestartSec=5
+RestartSec=3
 LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+  # Konfigurasi Sudoers agar service user space-lxd bisa merestart daemon & rebuild saat update
+  if [ -d "/etc/sudoers.d" ]; then
+    cat <<EOF | tee /etc/sudoers.d/space-lxd >/dev/null
+${SPACE_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart lxd-manager-master, /bin/systemctl restart lxd-manager-master, /usr/bin/systemctl restart lxd-manager-agent, /bin/systemctl restart lxd-manager-agent, /usr/bin/systemctl daemon-reload, /bin/systemctl daemon-reload, /usr/bin/chown -R ${SPACE_USER}\:${SPACE_USER} *, /bin/chown -R ${SPACE_USER}\:${SPACE_USER} *, /usr/bin/chmod -R *, /bin/chmod -R *
+EOF
+    chmod 440 /etc/sudoers.d/space-lxd 2>/dev/null || true
+  fi
 
   systemctl daemon-reload
   systemctl enable lxd-manager-master

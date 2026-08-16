@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -96,15 +97,27 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 		repoPath, _ = os.Getwd()
 	}
 
-	env := append(os.Environ(), "PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin:"+os.Getenv("PATH"))
-	if nodeBin, err := exec.LookPath("node"); err == nil {
-		nodeDir := strings.TrimSuffix(nodeBin, "/node")
-		env = append(env, "PATH="+nodeDir+":"+os.Getenv("PATH"))
+	// Dynamic PATH discovery
+	var extraPaths []string
+	extraPaths = append(extraPaths, "/usr/local/go/bin", "/usr/local/bin", "/usr/bin", "/bin", "/snap/bin")
+
+	for _, pattern := range []string{
+		"/home/*/.local/share/lerd/bin",
+		"/home/*/.nvm/versions/node/*/bin",
+		"/root/.local/share/lerd/bin",
+		"/root/.nvm/versions/node/*/bin",
+		"/opt/node/bin",
+	} {
+		if matches, err := filepath.Glob(pattern); err == nil {
+			extraPaths = append(extraPaths, matches...)
+		}
 	}
 
-	logFn(fmt.Sprintf("📦 Pulling update terbaru dari GitHub 'rizkykr/space-lxd' di %s...", repoPath))
+	env := append(os.Environ(), "PATH="+strings.Join(extraPaths, ":")+":"+os.Getenv("PATH"))
 
-	// Fix full directory permissions on /opt/space-lxd for service user space-lxd
+	logFn(fmt.Sprintf("📦 Mengunduh update terbaru dari GitHub di %s...", repoPath))
+
+	// Fix directory permissions if needed
 	_ = exec.Command("sudo", "chown", "-R", "space-lxd:space-lxd", repoPath).Run()
 	_ = exec.Command("sudo", "chmod", "-R", "u+rwX,g+rwX", repoPath).Run()
 
@@ -112,7 +125,6 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 	fetchCmd.Dir = repoPath
 	fetchCmd.Env = env
 	if _, err := fetchCmd.CombinedOutput(); err != nil {
-		// Fallback silently using sudo git fetch
 		sudoFetch := exec.Command("sudo", "git", "-c", "safe.directory=*", "-C", repoPath, "fetch", "origin", "main")
 		sudoFetch.Env = env
 		_ = sudoFetch.Run()
@@ -132,22 +144,25 @@ func ApplyUpdate(repoPath string, logFn func(string)) error {
 	logFn("✅ Source code berhasil diperbarui ke commit terbaru!")
 
 	logFn("🔨 Mengompilasi React UI & Biner Go...")
-	buildCmd := exec.Command("./scripts/build.sh")
+	buildCmd := exec.Command("/bin/bash", "./scripts/build.sh")
 	buildCmd.Dir = repoPath
 	buildCmd.Env = env
 	if out, err := buildCmd.CombinedOutput(); err != nil {
 		logFn(fmt.Sprintf("❌ Error build.sh: %s", string(out)))
 		return fmt.Errorf("build failed: %v", err)
 	}
-	logFn("✅ Kompilasi biner berhasil!")
+	logFn("✅ Kompilasi aset UI & biner Master/Agent berhasil!")
 
-	logFn("🔄 Merekonstruksi & Mengisi Ulang Service Daemon...")
+	logFn("🔄 Merefresh daemon service...")
 	logFn("🎉 UPDATE SELESAI! Space LXD Dashboard telah diperbarui ke versi terbaru.")
 
-	// Delayed restart (1s) in background so HTTP response finishes clean before daemon restarts
+	// Delayed restart so HTTP response finishes clean before daemon restarts
 	go func() {
-		time.Sleep(1 * time.Second)
+		time.Sleep(1500 * time.Millisecond)
 		_ = exec.Command("sudo", "systemctl", "restart", "lxd-manager-master").Run()
+		_ = exec.Command("systemctl", "restart", "lxd-manager-master").Run()
+		time.Sleep(2 * time.Second)
+		os.Exit(0)
 	}()
 
 	return nil

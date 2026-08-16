@@ -159,9 +159,10 @@ func main() {
 	mux.HandleFunc("/download/agent", srv.handleDownloadAgent)
 
 	// Static Web Dashboard SPA
-	webDir := filepath.Join(".", "web", "dist")
+	repoDir := srv.getRepoPath()
+	webDir := filepath.Join(repoDir, "web", "dist")
 	if _, err := os.Stat(webDir); os.IsNotExist(err) {
-		webDir = filepath.Join(".", "web")
+		webDir = filepath.Join(repoDir, "web")
 	}
 	fileServer := http.FileServer(http.Dir(webDir))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -169,7 +170,10 @@ func main() {
 			return
 		}
 		path := filepath.Join(webDir, r.URL.Path)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
+		if _, err := os.Stat(path); os.IsNotExist(err) || r.URL.Path == "/" || r.URL.Path == "/index.html" {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
 			http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
 			return
 		}
@@ -1603,6 +1607,11 @@ func (s *Server) handleSystemUpdate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logFn("❌ Update error: " + err.Error())
 	} else {
+		s.versionMu.Lock()
+		s.versionInfo = nil
+		s.versionAt = time.Time{}
+		s.versionMu.Unlock()
+
 		logFn("📢 Menyiarkan (broadcasting) instruksi update otomatis ke seluruh Worker Node Joiner di kluster...")
 		s.hub.ClusterBroadcastUpdate()
 	}

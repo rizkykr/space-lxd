@@ -47,6 +47,7 @@ export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh }) {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let hasError = false;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -55,21 +56,34 @@ export function TopHeader({ user, nodesCount = 0, onLogout, onRefresh }) {
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
         for (const line of lines) {
-          if (line.trim()) {
-            setUpdateLogs((prev) => [...prev, line.trim()]);
+          const trimmed = line.trim();
+          if (trimmed) {
+            if (trimmed.startsWith('❌') || trimmed.includes('Error:') || trimmed.includes('failed:')) {
+              hasError = true;
+            }
+            setUpdateLogs((prev) => [...prev, trimmed]);
           }
         }
       }
       if (buffer.trim()) {
-        setUpdateLogs((prev) => [...prev, buffer.trim()]);
+        const trimmed = buffer.trim();
+        if (trimmed.startsWith('❌') || trimmed.includes('Error:') || trimmed.includes('failed:')) {
+          hasError = true;
+        }
+        setUpdateLogs((prev) => [...prev, trimmed]);
       }
 
-      setUpdateSuccess(true);
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
+      if (!hasError) {
+        setUpdateSuccess(true);
+        setTimeout(() => {
+          window.location.href = window.location.pathname + '?_t=' + Date.now();
+        }, 3500);
+      } else {
+        setUpdateSuccess(false);
+      }
     } catch (e) {
       setUpdateLogs((prev) => [...prev, `❌ Error: ${e.message}`]);
+      setUpdateSuccess(false);
     } finally {
       setUpdating(false);
     }
