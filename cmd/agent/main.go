@@ -19,6 +19,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 
+	"lxd-manager-dashboard/pkg/bench"
 	"lxd-manager-dashboard/pkg/config"
 	"lxd-manager-dashboard/pkg/lxd"
 	"lxd-manager-dashboard/pkg/ws"
@@ -394,6 +395,16 @@ func handleMasterMessage(conn *websocket.Conn, wsMu *sync.Mutex, lxdClient *lxd.
 				time.Sleep(1 * time.Second)
 				_ = exec.Command("sudo", "space-lxd", "update").Run()
 			}()
+		case "get_hardware":
+			log.Printf("🖥️ [Agent] Gathering hardware info for node '%s'...", msg.NodeID)
+			hw := bench.GetHardwareInfo()
+			payload, _ := json.Marshal(hw)
+			respMsg.Payload = payload
+		case "benchmark":
+			log.Printf("⚡ [Agent] Running hardware benchmark for node '%s'...", msg.NodeID)
+			result := bench.RunBenchmark()
+			payload, _ := json.Marshal(result)
+			respMsg.Payload = payload
 		default:
 			err = fmt.Errorf("unknown action '%s'", msg.Action)
 		}

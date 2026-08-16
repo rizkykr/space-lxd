@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"lxd-manager-dashboard/pkg/auth"
+	"lxd-manager-dashboard/pkg/bench"
 	"lxd-manager-dashboard/pkg/config"
 	"lxd-manager-dashboard/pkg/db"
 	"lxd-manager-dashboard/pkg/lxd"
@@ -88,6 +90,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Failed to initialize database: %v", err)
 	}
+	_ = database.PruneOldData(90, 7)
 
 	hub := ws.NewHub()
 
@@ -125,6 +128,9 @@ func main() {
 
 	// Start Dashboard Live Broadcast Loop
 	go srv.startDashboardBroadcaster()
+
+	// Start Database Maintenance (prune + backup) Loop
+	go srv.startDBMaintenance()
 
 	// HTTP Routes
 	mux := http.NewServeMux()
@@ -798,6 +804,16 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(snapData)
 			return
+		case "get_hardware":
+			hw := bench.GetHardwareInfo()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(hw)
+			return
+		case "benchmark":
+			result := bench.RunBenchmark()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(result)
+			return
 		case "launch":
 			ramGB := req.RAMGB
 			if ramGB == 0 {
@@ -914,6 +930,9 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 	if req.Action == "launch" {
 		rpcTimeout = 5 * time.Minute
 	}
+	if req.Action == "benchmark" {
+		rpcTimeout = 2 * time.Minute
+	}
 
 	if req.Action == "launch" && r.URL.Query().Get("stream") == "true" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -952,6 +971,15 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Hardware info & benchmark responses return their payload directly.
+	if req.Action == "get_hardware" || req.Action == "benchmark" {
+		if len(resp.Payload) > 0 {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(resp.Payload)
+			return
+		}
 	}
 
 	if resp.Error == "" {
@@ -1494,6 +1522,50 @@ func (s *Server) handleDownloadAgent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) startLocalAgent() {
 	time.Sleep(2 * time.Second)
 	log.Println("🔄 Embedded Local Master Agent monitoring initialized")
+}
+
+// startDBMaintenance runs periodic database pruning and backups (daily).
+func (s *Server) startDBMaintenance() {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		s.runDBMaintenance()
+	}
+}
+
+func (s *Server) runDBMaintenance() {
+	if err := s.db.PruneOldData(90, 7); err != nil {
+		log.Printf("⚠️ DB prune failed: %v", err)
+	}
+	if err := s.dbBackup(); err != nil {
+		log.Printf("⚠️ DB backup failed: %v", err)
+	}
+}
+
+func (s *Server) dbBackup() error {
+	dir := s.cfg.DBBackupDir
+	if dir == "" {
+		dir = "backups"
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	name := fmt.Sprintf("lxd-manager-%s.db", time.Now().Format("20060102-150405"))
+	path := filepath.Join(dir, name)
+	if err := s.db.Backup(path); err != nil {
+		return err
+	}
+	log.Printf("💾 Database backup written: %s", path)
+
+	// Keep only the 7 most recent backups
+	matches, _ := filepath.Glob(filepath.Join(dir, "lxd-manager-*.db"))
+	if len(matches) > 7 {
+		sort.Strings(matches)
+		for _, old := range matches[:len(matches)-7] {
+			_ = os.Remove(old)
+		}
+	}
+	return nil
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
