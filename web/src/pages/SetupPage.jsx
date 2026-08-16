@@ -513,7 +513,7 @@ export function SetupPage({ onSetupComplete }) {
                     onClick={() => setForm({ ...form, master_public: currentOrigin })}
                     className="text-xs"
                   >
-                    {t('setup.endpoint.useCurrent')} ({currentOrigin})
+                    {t('setup.endpoint.useCurrent', { url: currentOrigin })}
                   </Button>
                 </div>
               </div>
