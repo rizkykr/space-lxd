@@ -4,8 +4,11 @@ import {
   LayoutDashboard, LineChart, Server, Key, Activity, User as UserIcon, Settings
 } from 'lucide-react';
 import { Badge } from '../ui/primitives';
+import { useI18n } from '../../i18n';
 
 export function Sidebar({ nodes = [] }) {
+  const { t } = useI18n();
+
   return (
     <aside className="w-64 bg-card border-r border-border flex flex-col justify-between shrink-0 sticky top-0 h-screen z-20">
       <div>
@@ -15,8 +18,8 @@ export function Sidebar({ nodes = [] }) {
             🪐
           </div>
           <div>
-            <h1 className="font-bold text-sm text-foreground tracking-tight">Space LXD</h1>
-            <p className="text-[10px] font-mono text-muted-foreground">v1.0 Infrastructure</p>
+            <h1 className="font-bold text-sm text-foreground tracking-tight">{t('app.name')}</h1>
+            <p className="text-[10px] font-mono text-muted-foreground">{t('nav.version')}</p>
           </div>
         </div>
 
@@ -24,7 +27,9 @@ export function Sidebar({ nodes = [] }) {
         <nav className="p-3 flex flex-col gap-5 font-sans">
           {/* Group 1: Main Platform */}
           <div className="flex flex-col gap-1">
-            <p className="px-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest font-bold mb-1">Infrastructure</p>
+            <p className="px-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest font-bold mb-1">
+              {t('nav.infrastructure')}
+            </p>
 
             <NavLink
               to="/"
@@ -38,7 +43,7 @@ export function Sidebar({ nodes = [] }) {
               }
             >
               <LayoutDashboard className="size-4 shrink-0 text-primary" />
-              <span>Overview Dashboard</span>
+              <span>{t('nav.dashboard')}</span>
             </NavLink>
 
             <NavLink
@@ -52,7 +57,7 @@ export function Sidebar({ nodes = [] }) {
               }
             >
               <LineChart className="size-4 shrink-0 text-emerald-400" />
-              <span>Realtime Monitoring</span>
+              <span>{t('nav.monitoring')}</span>
             </NavLink>
 
             <NavLink
@@ -67,7 +72,7 @@ export function Sidebar({ nodes = [] }) {
             >
               <div className="flex items-center gap-3">
                 <Server className="size-4 shrink-0 text-cyan-400" />
-                <span>Node Servers</span>
+                <span>{t('nav.nodes')}</span>
               </div>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">{nodes.length}</Badge>
             </NavLink>
@@ -75,7 +80,9 @@ export function Sidebar({ nodes = [] }) {
 
           {/* Group 2: Security & Logs */}
           <div className="flex flex-col gap-1">
-            <p className="px-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest font-bold mb-1">Management & Security</p>
+            <p className="px-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest font-bold mb-1">
+              {t('nav.security')}
+            </p>
 
             <NavLink
               to="/templates"
@@ -88,7 +95,7 @@ export function Sidebar({ nodes = [] }) {
               }
             >
               <Key className="size-4 shrink-0 text-amber-400" />
-              <span>SSH Keys & Presets</span>
+              <span>{t('nav.templates')}</span>
             </NavLink>
 
             <NavLink
@@ -102,13 +109,15 @@ export function Sidebar({ nodes = [] }) {
               }
             >
               <Activity className="size-4 shrink-0 text-purple-400" />
-              <span>Audit & Event Logs</span>
+              <span>{t('nav.logs')}</span>
             </NavLink>
           </div>
 
           {/* Group 3: System Settings */}
           <div className="flex flex-col gap-1">
-            <p className="px-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest font-bold mb-1">System & Admin</p>
+            <p className="px-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest font-bold mb-1">
+              {t('nav.system')}
+            </p>
 
             <NavLink
               to="/profile"
@@ -121,7 +130,7 @@ export function Sidebar({ nodes = [] }) {
               }
             >
               <UserIcon className="size-4 shrink-0" />
-              <span>Admin Profile</span>
+              <span>{t('nav.profile')}</span>
             </NavLink>
 
             <NavLink
@@ -135,7 +144,7 @@ export function Sidebar({ nodes = [] }) {
               }
             >
               <Settings className="size-4 shrink-0" />
-              <span>Cluster Settings</span>
+              <span>{t('nav.settings')}</span>
             </NavLink>
           </div>
         </nav>
@@ -149,8 +158,8 @@ export function Sidebar({ nodes = [] }) {
               ⚡
             </div>
             <div>
-              <p className="text-xs font-bold text-foreground">Cluster Mesh</p>
-              <p className="text-[10px] font-mono text-emerald-400 font-semibold">Active & Synced</p>
+              <p className="text-xs font-bold text-foreground">{t('nav.mesh')}</p>
+              <p className="text-[10px] font-mono text-emerald-400 font-semibold">{t('nav.meshStatus')}</p>
             </div>
           </div>
         </div>
@@ -158,3 +167,5 @@ export function Sidebar({ nodes = [] }) {
     </aside>
   );
 }
+
+export default Sidebar;

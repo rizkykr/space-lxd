@@ -70,21 +70,32 @@ func main() {
 }
 
 func runAgentLoop(cfg config.AgentConfig, lxdClient *lxd.Client, interrupt chan os.Signal, lxdFailCount *int) error {
-	u, err := url.Parse(cfg.MasterURL)
-	if err != nil {
-		return fmt.Errorf("invalid master URL: %w", err)
+	urls := parseMasterURLs(cfg.MasterURL)
+
+	var conn *websocket.Conn
+	for _, u := range urls {
+		parsed, err := url.Parse(u)
+		if err != nil {
+			continue
+		}
+
+		wsScheme := "ws"
+		if parsed.Scheme == "https" {
+			wsScheme = "wss"
+		}
+		wsURL := fmt.Sprintf("%s://%s/ws/agent", wsScheme, parsed.Host)
+
+		log.Printf("Connecting WebSocket to Master -> %s", wsURL)
+		c, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		if err == nil {
+			conn = c
+			break
+		}
+		log.Printf("⚠️ Failed to dial %s: %v", wsURL, err)
 	}
 
-	wsScheme := "ws"
-	if u.Scheme == "https" {
-		wsScheme = "wss"
-	}
-	wsURL := fmt.Sprintf("%s://%s/ws/agent", wsScheme, u.Host)
-
-	log.Printf("Connecting WebSocket to Master -> %s", wsURL)
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to dial websocket: %w", err)
+	if conn == nil {
+		return fmt.Errorf("all master endpoints unreachable: %v", urls)
 	}
 	defer conn.Close()
 
@@ -112,7 +123,7 @@ func runAgentLoop(cfg config.AgentConfig, lxdClient *lxd.Client, interrupt chan 
 	}
 
 	wsMu.Lock()
-	err = conn.WriteJSON(regMsg)
+	err := conn.WriteJSON(regMsg)
 	wsMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("failed to send register message: %w", err)
@@ -359,7 +370,23 @@ func handleMasterMessage(conn *websocket.Conn, wsMu *sync.Mutex, lxdClient *lxd.
 			if instType == "" {
 				instType = "container"
 			}
-			err = lxdClient.LaunchInstance(req.Name, img, instType, ramGB, cpuCores, req.DiskGB, req.Autostart, req.SSHKey, req.TemplatePreset)
+			err = lxdClient.LaunchInstance(lxd.LaunchOptions{
+				Name:           req.Name,
+				Image:          img,
+				Type:           instType,
+				RAMGB:          ramGB,
+				CPUCores:       cpuCores,
+				DiskGB:         req.DiskGB,
+				Autostart:      req.Autostart,
+				SSHKey:         req.SSHKey,
+				TemplatePreset: req.TemplatePreset,
+				StoragePool:    req.StoragePool,
+				Network:        req.Network,
+				Privileged:     req.Privileged,
+				Nesting:        req.Nesting,
+				CPUAllowance:   req.CPUAllowance,
+				MemorySwap:     req.MemorySwap,
+			})
 		case "self_update":
 			log.Printf("🚀 [Agent Self-Update] Received cluster update command from Master! Executing space-lxd update...")
 			go func() {
@@ -389,4 +416,20 @@ func parseRAMGB(limitStr string) int {
 		return 2
 	}
 	return val
+}
+
+// parseMasterURLs splits a (possibly comma-separated) MASTER_URL list into
+// clean endpoint strings, defaulting to localhost when empty.
+func parseMasterURLs(masterURL string) []string {
+	var out []string
+	for _, u := range strings.Split(masterURL, ",") {
+		u = strings.TrimSpace(u)
+		if u != "" {
+			out = append(out, u)
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, "http://localhost:9090")
+	}
+	return out
 }

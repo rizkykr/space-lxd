@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Badge, Select } from '../components/ui/primitives';
+import { useI18n } from '../i18n';
 
 export function AuditLogsPage() {
+  const { t } = useI18n();
   const [logs, setLogs] = useState([]);
   const [filterAction, setFilterAction] = useState('ALL');
 
@@ -19,8 +21,8 @@ export function AuditLogsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight">Cluster Audit & Event Logs</h1>
-          <p className="text-xs text-muted-foreground">Jejak audit otomatis seluruh aktivitas kluster, pembuatan node, dan manajemen LXD</p>
+          <h1 className="text-xl font-bold text-foreground tracking-tight">{t('logs.title')}</h1>
+          <p className="text-xs text-muted-foreground">{t('logs.subtitle')}</p>
         </div>
 
         <Select
@@ -30,7 +32,7 @@ export function AuditLogsPage() {
         >
           {uniqueActions.map(act => (
             <option key={act} value={act}>
-              {act === 'ALL' ? `🌐 All Event Actions (${logs.length})` : act}
+              {act === 'ALL' ? `🌐 ${t('logs.allActions', { n: logs.length })}` : act}
             </option>
           ))}
         </Select>
@@ -41,18 +43,18 @@ export function AuditLogsPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider bg-background">
-                <th className="py-3 px-4">ID</th>
-                <th className="py-3 px-4">Action Event</th>
-                <th className="py-3 px-4">Target / Entity</th>
-                <th className="py-3 px-4">Detail Description</th>
-                <th className="py-3 px-4">Timestamp</th>
+                <th className="py-3 px-4">{t('logs.id')}</th>
+                <th className="py-3 px-4">{t('logs.action')}</th>
+                <th className="py-3 px-4">{t('logs.target')}</th>
+                <th className="py-3 px-4">{t('logs.detail')}</th>
+                <th className="py-3 px-4">{t('logs.timestamp')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="text-center py-10 text-muted-foreground">
-                    Belum ada data audit log tercatat.
+                    {t('logs.empty')}
                   </td>
                 </tr>
               ) : (
@@ -75,3 +77,5 @@ export function AuditLogsPage() {
     </div>
   );
 }
+
+export default AuditLogsPage;

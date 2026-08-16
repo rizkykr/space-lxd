@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Card, Button, Badge, Input } from '../components/ui/primitives';
 import { Plus, Layers, Edit2, Check, X, Loader2 } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 export function NodesPage() {
   const { nodes, fetchNodes, addToast, onOpenAddNode } = useOutletContext();
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const [editingNodeId, setEditingNodeId] = useState(null);
   const [editingName, setEditingName] = useState('');
@@ -15,7 +17,7 @@ export function NodesPage() {
     e.stopPropagation();
     const trimmed = editingName.trim();
     if (!trimmed) {
-      addToast('error', 'Nama node tidak boleh kosong');
+      addToast('error', t('nodes.nameRequired'));
       return;
     }
     setLoadingNodeId(nodeId);
@@ -26,14 +28,14 @@ export function NodesPage() {
         body: JSON.stringify({ action: 'rename_node', new_name: trimmed })
       });
       if (res.ok) {
-        addToast('success', `Nama node berhasil diperbarui menjadi '${trimmed}'`);
+        addToast('success', t('nodes.renameSuccess', { name: trimmed }));
         setEditingNodeId(null);
         fetchNodes();
       } else {
         addToast('error', await res.text());
       }
     } catch (err) {
-      addToast('error', "Error: " + err.message);
+      addToast('error', t('nodes.error', { msg: err.message }));
     } finally {
       setLoadingNodeId(null);
     }
@@ -44,14 +46,14 @@ export function NodesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
-            <span>Node Servers</span>
-            <Badge variant="success">🌐 Cross-Node IP Mesh Active</Badge>
+            <span>{t('nodes.title')}</span>
+            <Badge variant="success">🌐 {t('nodes.badge')}</Badge>
           </h1>
-          <p className="text-xs text-muted-foreground">Pilih Node Server untuk mengelola container LXD di dalamnya</p>
+          <p className="text-xs text-muted-foreground">{t('nodes.subtitle')}</p>
         </div>
         <Button onClick={onOpenAddNode}>
-          <Plus className="size-4" data-icon="inline-start" />
-          <span>Add Node Server</span>
+          <Plus className="size-4 mr-1.5" />
+          <span>{t('nodes.add')}</span>
         </Button>
       </div>
 
@@ -90,7 +92,7 @@ export function NodesPage() {
                           variant="ghost"
                           size="icon"
                           className="size-6 opacity-0 group-hover:opacity-100 transition text-muted-foreground hover:text-primary"
-                          title="Ubah Nama Node"
+                          title={t('nodes.renameNode')}
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditingNodeId(node.id);
@@ -106,19 +108,19 @@ export function NodesPage() {
                     </div>
                   )}
                 </div>
-                {node.is_master ? <Badge variant="info">MASTER</Badge> : <Badge variant="secondary">WORKER</Badge>}
+                {node.is_master ? <Badge variant="info">{t('common.master')}</Badge> : <Badge variant="secondary">{t('common.worker')}</Badge>}
               </div>
 
               <div className="text-xs font-mono text-foreground bg-background p-3 rounded-md border border-border space-y-1.5">
-                <div className="flex justify-between"><span>OS Distro:</span><span className="font-bold">{node.os_name || 'Linux'}</span></div>
+                <div className="flex justify-between"><span>{t('nodes.osDistro')}:</span><span className="font-bold">{node.os_name || 'Linux'}</span></div>
                 <div className="flex justify-between"><span>Status:</span><span className={node.status === 'online' ? 'text-emerald-400 font-bold' : 'text-muted-foreground'}>{node.status.toUpperCase()}</span></div>
-                <div className="flex justify-between"><span>Uptime:</span><span className="text-muted-foreground">{node.uptime || '0m'}</span></div>
-                <div className="flex justify-between"><span>LXDs Active:</span><span className="text-primary font-bold">{lxdsCount} containers</span></div>
+                <div className="flex justify-between"><span>{t('nodes.uptime')}:</span><span className="text-muted-foreground">{node.uptime || '0m'}</span></div>
+                <div className="flex justify-between"><span>{t('nodes.lxdsActive')}:</span><span className="text-primary font-bold">{lxdsCount} containers</span></div>
               </div>
 
               <Button className="w-full text-xs" onClick={(e) => { e.stopPropagation(); navigate(`/nodes/${node.id}`); }}>
-                <Layers className="size-3.5" data-icon="inline-start" />
-                <span>Kelola LXD Container ({lxdsCount})</span>
+                <Layers className="size-3.5 mr-1.5" />
+                <span>{t('nodes.manageLxd', { n: lxdsCount })}</span>
               </Button>
             </Card>
           );
@@ -127,3 +129,5 @@ export function NodesPage() {
     </div>
   );
 }
+
+export default NodesPage;

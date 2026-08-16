@@ -124,21 +124,96 @@ EOF
   info "  📌 SSH Public Key: $(cat ${PUBKEY_FILE})"
 }
 
+detect_lxd_socket() {
+  for s in /var/snap/lxd/common/lxd/unix.socket /var/lib/lxd/unix.socket /var/lib/incus/unix.socket; do
+    if [ -S "$s" ]; then
+      echo "$s"
+      return 0
+    fi
+  done
+  echo "/var/lib/lxd/unix.socket"
+}
+
+# Auto-install LXD using native distro package manager (snap only as last resort)
+install_lxd_package() {
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update
+    apt-get install -y lxd lvm2 || return 1
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y lxd lvm2 || return 1
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y lxd lvm2 || return 1
+  elif command -v pacman >/dev/null 2>&1; then
+    pacman -Sy --noconfirm lxd lvm2 || return 1
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache lxd lvm2 || return 1
+  elif command -v zypper >/dev/null 2>&1; then
+    zypper --non-interactive install lxd lvm2 || return 1
+  elif command -v snap >/dev/null 2>&1; then
+    snap install lxd || return 1
+  else
+    return 1
+  fi
+}
+
+# Best-performance auto-config: ZFS > LVM-thin > dir, plus managed NAT bridge.
+configure_lxd() {
+  # Wait until daemon socket is ready
+  for _ in $(seq 1 30); do
+    LXD_SOCKET="$(detect_lxd_socket)"
+    [ -S "$LXD_SOCKET" ] && break
+    sleep 1
+  done
+
+  # Storage pool (skip if already exists)
+  if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
+    if command -v zfs >/dev/null 2>&1; then
+      info "Configuring ZFS storage pool (best performance)..."
+      lxd init --auto --storage-backend=zfs --storage-create-loop=10GB --storage-pool=default 2>/dev/null || true
+    fi
+    if ! lxc storage list --format=csv 2>/dev/null | grep -q . && command -v lvcreate >/dev/null 2>&1; then
+      info "Configuring LVM-thin storage pool (copy-on-write)..."
+      lxd init --auto --storage-backend=lvm --storage-create-loop=10GB --storage-pool=default 2>/dev/null || true
+    fi
+    if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
+      warn "ZFS/LVM unavailable, using dir storage fallback."
+      lxd init --auto 2>/dev/null || true
+    fi
+  fi
+
+  # Best-performance defaults: ZFS compression & no swap thrashing
+  lxc storage set default zfs.compression=on 2>/dev/null || true
+  lxc profile set default limits.memory.swap=false 2>/dev/null || true
+
+  # Managed bridge with unique subnet (avoid cross-node collision)
+  if ! lxc network show lxdbr0 >/dev/null 2>&1; then
+    NODE_HASH=$(cksum <<< "$(hostname)" | awk '{print $1}')
+    SUBNET_OCTET=$(( (NODE_HASH % 200) + 10 ))
+    lxc network create lxdbr0 ipv4.address="10.171.${SUBNET_OCTET}.1/24" ipv4.nat=true ipv6.address=none 2>/dev/null || true
+    lxc profile device add default eth0 nictype=bridged parent=lxdbr0 name=eth0 2>/dev/null || true
+    info "LXD virtual bridge 'lxdbr0' initialized (10.171.${SUBNET_OCTET}.1/24 NAT)."
+  fi
+
+  # Kernel IPv4 forwarding for cross-node routing
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+  if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+  fi
+}
+
 check_lxd() {
   info "Checking LXD daemon installation..."
   if command -v lxc >/dev/null 2>&1; then
     LXC_VER=$(lxc --version 2>/dev/null || echo "ok")
     success "LXD CLI (lxc) found: ${LXC_VER}"
   else
-    warn "LXD tidak ditemukan! Menginstall LXD via Snap..."
-    if command -v snap >/dev/null 2>&1; then
-      snap install lxd || error "Gagal menginstall LXD snap!"
-      lxd init --auto || true
-      success "LXD berhasil diinstall dan diinisialisasi otomatis!"
-    else
-      error "Snap package manager tidak ditemukan! Harap install LXD secara manual pada host ini."
-    fi
+    warn "LXD tidak ditemukan! Menginstall LXD via package manager native (tanpa snap)..."
+    install_lxd_package || error "Gagal menginstall LXD. Tidak ada package manager yang didukung."
+    success "LXD berhasil diinstall!"
   fi
+  configure_lxd
+  LXD_SOCKET="$(detect_lxd_socket)"
+  success "LXD siap dengan socket: ${LXD_SOCKET}"
 }
 
 install_node_lts() {
@@ -214,6 +289,12 @@ build_project() {
   ensure_repo
   cd "${ROOT_DIR}"
 
+  # Fast-path: skip compilation when pre-built binaries & UI already exist
+  if [ -x "${ROOT_DIR}/bin/lxd-manager-master" ] && [ -x "${ROOT_DIR}/bin/lxd-manager-agent" ] && [ -d "${ROOT_DIR}/web/dist" ]; then
+    success "Biner & aset UI pre-built terdeteksi, melewati proses kompilasi."
+    return 0
+  fi
+
   install_node_lts
   install_golang_latest
 
@@ -255,6 +336,7 @@ Group=${SPACE_USER}
 WorkingDirectory=${ROOT_DIR}
 Environment="PORT=${PORT}"
 Environment="HOME=${SPACE_HOME}"
+Environment="LXD_SOCKET=${LXD_SOCKET}"
 ExecStart=${ROOT_DIR}/bin/lxd-manager-master
 Restart=always
 RestartSec=5

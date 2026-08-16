@@ -2,6 +2,7 @@ import React, { useEffect, useRef, memo } from 'react';
 import { Terminal as XTerminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
+import { wsUrl } from '../../utils/api';
 
 export const EmbeddedTerminal = memo(function EmbeddedTerminal({ name, nodeId }) {
   const containerRef = useRef(null);
@@ -36,10 +37,8 @@ export const EmbeddedTerminal = memo(function EmbeddedTerminal({ name, nodeId })
     }, 200);
 
     function connectWS() {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const nodeQuery = nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : '';
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(name)}${nodeQuery}`;
-      const socket = new WebSocket(wsUrl);
+      const socket = new WebSocket(wsUrl(`/ws/terminal?name=${encodeURIComponent(name)}${nodeQuery}`));
       socketRef.current = socket;
 
       socket.onopen = () => {

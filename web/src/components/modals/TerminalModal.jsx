@@ -4,6 +4,7 @@ import { Terminal as XTerminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
 import { X, Terminal } from 'lucide-react';
+import { wsUrl } from '../../utils/api';
 
 const TerminalPane = memo(function TerminalPane({ name, nodeId }) {
   const containerRef = useRef(null);
@@ -37,10 +38,8 @@ const TerminalPane = memo(function TerminalPane({ name, nodeId }) {
     }, 200);
 
     function connectWS() {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const nodeQuery = nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : '';
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?name=${encodeURIComponent(name)}${nodeQuery}`;
-      const socket = new WebSocket(wsUrl);
+      const socket = new WebSocket(wsUrl(`/ws/terminal?name=${encodeURIComponent(name)}${nodeQuery}`));
       socketRef.current = socket;
 
       socket.onopen = () => {

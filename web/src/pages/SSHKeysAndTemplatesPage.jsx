@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Card, Button, Badge, Input, Textarea } from '../components/ui/primitives';
 import { Key, Sparkles } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 export function SSHKeysAndTemplatesPage() {
+  const { t } = useI18n();
   const [sshKeys, setSshKeys] = useState([]);
   const [keyForm, setKeyForm] = useState({ name: '', public_key: '' });
   const [loading, setLoading] = useState(false);
@@ -28,7 +30,7 @@ export function SSHKeysAndTemplatesPage() {
         body: JSON.stringify(keyForm)
       });
       if (res.ok) {
-        addToast('success', `SSH Public Key '${keyForm.name}' ditambahkan!`);
+        addToast('success', t('keys.added', { name: keyForm.name }));
         setKeyForm({ name: '', public_key: '' });
         fetchKeys();
       } else {
@@ -51,20 +53,20 @@ export function SSHKeysAndTemplatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-foreground tracking-tight">SSH Keys & Cloud-Init Presets</h1>
-        <p className="text-xs text-muted-foreground">Kelola kunci SSH publik untuk login otomatis dan template bootstrap LXD</p>
+        <h1 className="text-xl font-bold text-foreground tracking-tight">{t('keys.title')}</h1>
+        <p className="text-xs text-muted-foreground">{t('keys.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-5 space-y-4">
           <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
             <Key className="size-4 text-amber-400" />
-            <span>Manage User SSH Public Keys</span>
+            <span>{t('keys.manage')}</span>
           </h2>
 
           <form onSubmit={handleAddKey} className="space-y-3 text-xs font-mono">
             <div>
-              <label className="block text-muted-foreground mb-1">Key Label Name</label>
+              <label className="block text-muted-foreground mb-1">{t('keys.labelName')}</label>
               <Input
                 type="text"
                 placeholder="dev-laptop-key"
@@ -74,7 +76,7 @@ export function SSHKeysAndTemplatesPage() {
               />
             </div>
             <div>
-              <label className="block text-muted-foreground mb-1">Public Key (ssh-rsa / ssh-ed25519)</label>
+              <label className="block text-muted-foreground mb-1">{t('keys.publicKey')}</label>
               <Textarea
                 rows="3"
                 placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
@@ -84,14 +86,16 @@ export function SSHKeysAndTemplatesPage() {
               />
             </div>
             <Button type="submit" disabled={loading}>
-              Add Public Key
+              {t('keys.addKey')}
             </Button>
           </form>
 
           <div className="space-y-2 pt-2">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">Registered Keys ({sshKeys.length})</h3>
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
+              {t('keys.registered', { n: sshKeys.length })}
+            </h3>
             {sshKeys.length === 0 ? (
-              <p className="text-xs font-mono text-muted-foreground italic">Belum ada SSH Key tersimpan.</p>
+              <p className="text-xs font-mono text-muted-foreground italic">{t('keys.noKeys')}</p>
             ) : (
               sshKeys.map((k, idx) => (
                 <div key={idx} className="p-3 bg-background border border-border rounded-md flex items-center justify-between text-xs font-mono">
@@ -99,7 +103,7 @@ export function SSHKeysAndTemplatesPage() {
                     <p className="text-foreground font-bold">{k.name}</p>
                     <p className="text-[10px] text-muted-foreground truncate max-w-xs">{k.public_key}</p>
                   </div>
-                  <Badge variant="outline">Registered</Badge>
+                  <Badge variant="outline">{t('keys.registeredBadge')}</Badge>
                 </div>
               ))
             )}
@@ -109,7 +113,7 @@ export function SSHKeysAndTemplatesPage() {
         <Card className="p-5 space-y-4">
           <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
             <Sparkles className="size-4 text-primary" />
-            <span>Cloud-Init Bootstrap Templates</span>
+            <span>{t('keys.templates')}</span>
           </h2>
 
           <div className="space-y-3">
@@ -119,7 +123,7 @@ export function SSHKeysAndTemplatesPage() {
                   <h3 className="font-bold text-foreground text-xs">{tpl.title}</h3>
                   <Badge variant="info">{tpl.tag}</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">{tpl.desc}</p>
+                <p className="text-xs text-muted-foreground font-sans">{tpl.desc}</p>
               </div>
             ))}
           </div>
@@ -128,3 +132,5 @@ export function SSHKeysAndTemplatesPage() {
     </div>
   );
 }
+
+export default SSHKeysAndTemplatesPage;

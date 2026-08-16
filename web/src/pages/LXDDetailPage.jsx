@@ -5,11 +5,14 @@ import { SVGSparklineChart } from '../utils/SVGSparklineChart';
 import { EmbeddedTerminal } from '../components/terminal/EmbeddedTerminal';
 import { ConfirmDialog } from '../components/modals/ConfirmDialog';
 import { ChevronRight, Play, Square, RotateCcw, Trash2, Terminal, Loader2, Save } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 export function LXDDetailPage() {
   const { nodeId, lxdName } = useParams();
   const navigate = useNavigate();
   const { nodes, fetchNodes, addToast } = useOutletContext();
+  const { t } = useI18n();
+
   const [activeTab, setActiveTab] = useState('overview');
   const [loadingAction, setLoadingAction] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
@@ -63,7 +66,7 @@ export function LXDDetailPage() {
         if (Array.isArray(data.snapshots)) {
           setSnapshots(data.snapshots.map(s => ({
             name: s.name,
-            created_at: s.created_at ? new Date(s.created_at).toLocaleString() : 'Baru saja'
+            created_at: s.created_at ? new Date(s.created_at).toLocaleString() : 'Recent'
           })));
         }
       }
@@ -85,7 +88,7 @@ export function LXDDetailPage() {
         body: JSON.stringify({ action, name: lxdName })
       });
       if (res.ok) {
-        addToast('success', `Aksi '${action}' berhasil dieksekusi untuk ${lxdName}`);
+        addToast('success', t('detail.actionSuccess', { action, name: lxdName }));
         if (action === 'delete') {
           navigate(`/nodes/${nodeId}`);
         } else {
@@ -105,8 +108,8 @@ export function LXDDetailPage() {
   const promptDeleteLXD = () => {
     setConfirmModal({
       isOpen: true,
-      title: `Hapus LXD Container '${lxdName}'`,
-      message: `Apakah Anda yakin ingin menghapus LXD Container '${lxdName}' di Node ${targetNode?.name || nodeId}? Semua file, data, dan snapshot di dalam container ini akan dihapus secara permanen.`,
+      title: `${t('detail.deleteLxdTitle')} '${lxdName}'`,
+      message: t('detail.deleteLxdMsg', { name: lxdName, node: targetNode?.name || nodeId }),
       requireMatchText: lxdName,
       onConfirm: () => handleAction('delete')
     });
@@ -128,7 +131,7 @@ export function LXDDetailPage() {
         })
       });
       if (res.ok) {
-        addToast('success', `Konfigurasi container '${lxdName}' berhasil diperbarui!`);
+        addToast('success', t('detail.configSaved', { name: lxdName }));
         fetchNodes();
       } else {
         addToast('error', await res.text());
@@ -156,7 +159,7 @@ export function LXDDetailPage() {
         })
       });
       if (res.ok) {
-        addToast('success', `Jadwal snapshot container '${lxdName}' berhasil disimpan!`);
+        addToast('success', t('detail.scheduleSaved', { name: lxdName }));
         fetchSnapshotsData();
       } else {
         addToast('error', await res.text());
@@ -179,7 +182,7 @@ export function LXDDetailPage() {
         body: JSON.stringify({ action: 'create_snapshot', name: lxdName, snap_name: snapName })
       });
       if (res.ok) {
-        addToast('success', `Snapshot '${snapName}' berhasil dibuat!`);
+        addToast('success', t('detail.snapshotCreated', { name: snapName }));
         setNewSnapName('');
         fetchSnapshotsData();
       } else {
@@ -201,7 +204,7 @@ export function LXDDetailPage() {
         body: JSON.stringify({ action: 'restore_snapshot', name: lxdName, snap_name: snapName })
       });
       if (res.ok) {
-        addToast('success', `Container '${lxdName}' berhasil di-restore ke snapshot '${snapName}'!`);
+        addToast('success', t('detail.restored', { name: lxdName, snap: snapName }));
         fetchNodes();
       } else {
         addToast('error', await res.text());
@@ -217,8 +220,8 @@ export function LXDDetailPage() {
   const promptRestoreSnapshot = (snapName) => {
     setConfirmModal({
       isOpen: true,
-      title: `Restore Snapshot '${snapName}'`,
-      message: `Apakah Anda yakin ingin mengembalikan kondisi container '${lxdName}' ke Snapshot '${snapName}'? Seluruh perubahan data yang dibuat setelah tanggal snapshot ini diciptakan akan hilang!`,
+      title: `${t('detail.restoreTitle')} '${snapName}'`,
+      message: t('detail.restoreMsg', { container: lxdName, name: snapName }),
       onConfirm: () => handleRestoreSnapshot(snapName)
     });
   };
@@ -232,7 +235,7 @@ export function LXDDetailPage() {
         body: JSON.stringify({ action: 'delete_snapshot', name: lxdName, snap_name: snapName })
       });
       if (res.ok) {
-        addToast('success', `Snapshot '${snapName}' telah dihapus.`);
+        addToast('success', t('detail.snapshotDeleted', { name: snapName }));
         fetchSnapshotsData();
       } else {
         addToast('error', await res.text());
@@ -248,8 +251,8 @@ export function LXDDetailPage() {
   const promptDeleteSnapshot = (snapName) => {
     setConfirmModal({
       isOpen: true,
-      title: `Hapus Snapshot '${snapName}'`,
-      message: `Apakah Anda yakin ingin menghapus snapshot '${snapName}' milik container '${lxdName}'?`,
+      title: `${t('detail.snapDeleteTitle')} '${snapName}'`,
+      message: t('detail.snapDeleteMsg', { name: snapName, container: lxdName }),
       onConfirm: () => handleDeleteSnapshot(snapName)
     });
   };
@@ -260,9 +263,13 @@ export function LXDDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground mb-1">
-            <span className="cursor-pointer hover:underline text-primary" onClick={() => navigate('/nodes')}>Node Servers</span>
+            <span className="cursor-pointer hover:underline text-primary" onClick={() => navigate('/nodes')}>
+              {t('detail.breadcrumbNodes')}
+            </span>
             <ChevronRight className="size-3" />
-            <span className="cursor-pointer hover:underline text-primary" onClick={() => navigate(`/nodes/${nodeId}`)}>Node: {targetNode?.name || nodeId}</span>
+            <span className="cursor-pointer hover:underline text-primary" onClick={() => navigate(`/nodes/${nodeId}`)}>
+              {t('detail.breadcrumbNode', { name: targetNode?.name || nodeId })}
+            </span>
             <ChevronRight className="size-3" />
             <span className="text-foreground font-bold">{lxdName}</span>
           </div>
@@ -271,42 +278,42 @@ export function LXDDetailPage() {
             <Badge variant={isRunning ? 'success' : isFrozen ? 'warning' : 'secondary'}>
               {lxdItem.status.toUpperCase()}
             </Badge>
-            <Badge variant="info">LXC Container</Badge>
+            <Badge variant="info">{t('detail.typeContainer')}</Badge>
           </h1>
         </div>
 
-        {/* Action Toolbar with Loading Spinners */}
+        {/* Action Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
           {isRunning ? (
             <>
               <Button variant="outline" onClick={() => handleAction('stop')} disabled={!!loadingAction}>
-                {loadingAction === 'stop' ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : <Square className="size-3.5 text-amber-400" data-icon="inline-start" />}
-                <span>{loadingAction === 'stop' ? 'Stopping...' : 'Stop'}</span>
+                {loadingAction === 'stop' ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <Square className="size-3.5 text-amber-400 mr-1.5" />}
+                <span>{loadingAction === 'stop' ? 'Stopping...' : t('detail.stop')}</span>
               </Button>
               <Button variant="outline" onClick={() => handleAction('restart')} disabled={!!loadingAction}>
-                {loadingAction === 'restart' ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : <RotateCcw className="size-3.5 text-cyan-400" data-icon="inline-start" />}
-                <span>{loadingAction === 'restart' ? 'Restarting...' : 'Restart'}</span>
+                {loadingAction === 'restart' ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <RotateCcw className="size-3.5 text-cyan-400 mr-1.5" />}
+                <span>{loadingAction === 'restart' ? 'Restarting...' : t('detail.restart')}</span>
               </Button>
               <Button variant="outline" onClick={() => handleAction('pause')} disabled={!!loadingAction}>
-                {loadingAction === 'pause' ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : <Square className="size-3.5 text-purple-400" data-icon="inline-start" />}
-                <span>{loadingAction === 'pause' ? 'Freezing...' : 'Freeze / Pause'}</span>
+                {loadingAction === 'pause' ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <Square className="size-3.5 text-purple-400 mr-1.5" />}
+                <span>{loadingAction === 'pause' ? 'Freezing...' : t('detail.freeze')}</span>
               </Button>
             </>
           ) : isFrozen ? (
             <Button variant="outline" onClick={() => handleAction('resume')} disabled={!!loadingAction}>
-              {loadingAction === 'resume' ? <Loader2 className="size-3.5 animate-spin text-emerald-400" data-icon="inline-start" /> : <Play className="size-3.5 text-emerald-400" data-icon="inline-start" />}
-              <span>{loadingAction === 'resume' ? 'Resuming...' : 'Unfreeze / Resume'}</span>
+              {loadingAction === 'resume' ? <Loader2 className="size-3.5 animate-spin text-emerald-400 mr-1.5" /> : <Play className="size-3.5 text-emerald-400 mr-1.5" />}
+              <span>{loadingAction === 'resume' ? 'Resuming...' : t('detail.resume')}</span>
             </Button>
           ) : (
             <Button variant="outline" onClick={() => handleAction('start')} disabled={!!loadingAction}>
-              {loadingAction === 'start' ? <Loader2 className="size-3.5 animate-spin text-emerald-400" data-icon="inline-start" /> : <Play className="size-3.5 text-emerald-400" data-icon="inline-start" />}
-              <span>{loadingAction === 'start' ? 'Starting...' : 'Start'}</span>
+              {loadingAction === 'start' ? <Loader2 className="size-3.5 animate-spin text-emerald-400 mr-1.5" /> : <Play className="size-3.5 text-emerald-400 mr-1.5" />}
+              <span>{loadingAction === 'start' ? 'Starting...' : t('detail.start')}</span>
             </Button>
           )}
 
           <Button variant="destructive" onClick={promptDeleteLXD} disabled={!!loadingAction}>
-            {loadingAction === 'delete' ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : <Trash2 className="size-3.5" data-icon="inline-start" />}
-            <span>{loadingAction === 'delete' ? 'Deleting...' : 'Delete'}</span>
+            {loadingAction === 'delete' ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <Trash2 className="size-3.5 mr-1.5" />}
+            <span>{loadingAction === 'delete' ? 'Deleting...' : t('detail.delete')}</span>
           </Button>
         </div>
       </div>
@@ -317,25 +324,25 @@ export function LXDDetailPage() {
           onClick={() => setActiveTab('overview')}
           className={`flex-1 py-2.5 rounded-md transition font-medium text-center ${activeTab === 'overview' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          📊 Overview & Telemetry
+          📊 {t('detail.tabOverview')}
         </button>
         <button
           onClick={() => setActiveTab('config')}
           className={`flex-1 py-2.5 rounded-md transition font-medium text-center ${activeTab === 'config' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          ⚙️ Configuration & Limits
+          ⚙️ {t('detail.tabConfig')}
         </button>
         <button
           onClick={() => setActiveTab('snapshots')}
           className={`flex-1 py-2.5 rounded-md transition font-medium text-center ${activeTab === 'snapshots' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          📸 Snapshots ({snapshots.length})
+          📸 {t('detail.tabSnapshots', { n: snapshots.length })}
         </button>
         <button
           onClick={() => setActiveTab('terminal')}
           className={`flex-1 py-2.5 rounded-md transition font-medium text-center ${activeTab === 'terminal' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
-          🖥 Terminal Shell Console
+          🖥 {t('detail.tabTerminal')}
         </button>
       </Card>
 
@@ -344,25 +351,25 @@ export function LXDDetailPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="p-4 space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase">IPv4 Address</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase">{t('detail.ipv4')}</p>
               <p className="text-xl font-bold font-mono text-foreground">{lxdItem.ipv4 || '—'}</p>
             </Card>
             <Card className="p-4 space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase">RAM Memory Limit</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase">{t('detail.ramLimit')}</p>
               <p className="text-xl font-bold font-mono text-purple-400">{lxdItem.ram_limit_mb || 2048} MB</p>
             </Card>
             <Card className="p-4 space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase">CPU Allocation</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase">{t('detail.cpuAllocation')}</p>
               <p className="text-xl font-bold font-mono text-amber-400">{lxdItem.cpu_cores || 2} Cores</p>
             </Card>
             <Card className="p-4 space-y-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase">Autostart Boot</p>
-              <p className="text-xl font-bold font-mono text-emerald-400">{configForm.autostart ? 'Enabled' : 'Disabled'}</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase">{t('detail.autostart')}</p>
+              <p className="text-xl font-bold font-mono text-emerald-400">{configForm.autostart ? t('common.enabled') : t('common.disabled')}</p>
             </Card>
           </div>
 
           <Card className="p-5 space-y-3">
-            <h3 className="text-xs font-bold text-foreground uppercase tracking-wider font-mono">Realtime Telemetry Chart</h3>
+            <h3 className="text-xs font-bold text-foreground uppercase tracking-wider font-mono">{t('detail.telemetry')}</h3>
             <SVGSparklineChart points={[12, 18, 25, 20, 32, 28, 35]} color="#a855f7" max={100} height={120} />
           </Card>
         </div>
@@ -371,10 +378,10 @@ export function LXDDetailPage() {
       {/* Tab 2: Configuration */}
       {activeTab === 'config' && (
         <Card className="p-6 max-w-xl space-y-4">
-          <h3 className="text-sm font-bold text-foreground">Update Container Resource Limits</h3>
+          <h3 className="text-sm font-bold text-foreground">{t('detail.updateConfig')}</h3>
           <form onSubmit={handleSaveConfig} className="space-y-4 text-xs font-sans">
             <div>
-              <label className="block text-muted-foreground mb-1">RAM Memory Limit (GB)</label>
+              <label className="block text-muted-foreground mb-1">{t('detail.ramLabel')}</label>
               <Input
                 type="number"
                 min="1"
@@ -384,7 +391,7 @@ export function LXDDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-muted-foreground mb-1">CPU Cores Allowance</label>
+              <label className="block text-muted-foreground mb-1">{t('detail.cpuLabel')}</label>
               <Input
                 type="number"
                 min="1"
@@ -402,12 +409,12 @@ export function LXDDetailPage() {
                 className="accent-primary"
               />
               <label htmlFor="autostart_chk" className="text-xs text-foreground cursor-pointer font-medium">
-                Boot Autostart (Otomatis nyalakan saat host server restart)
+                {t('detail.autostartLabel')}
               </label>
             </div>
             <Button type="submit" disabled={loadingAction === 'save_config'}>
-              {loadingAction === 'save_config' && <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />}
-              <span>{loadingAction === 'save_config' ? 'Menyimpan...' : 'Simpan Konfigurasi Container'}</span>
+              {loadingAction === 'save_config' && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+              <span>{loadingAction === 'save_config' ? t('detail.saving') : t('detail.saveConfig')}</span>
             </Button>
           </form>
         </Card>
@@ -421,18 +428,18 @@ export function LXDDetailPage() {
               <div>
                 <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                   <RotateCcw className="size-4 text-primary" />
-                  <span>Automated Scheduled Snapshots Configuration</span>
+                  <span>{t('detail.snapSchedule')}</span>
                 </h3>
-                <p className="text-xs text-muted-foreground">Aktifkan pembackupan snapshot otomatis berkala dengan retensi waktu terukur</p>
+                <p className="text-xs text-muted-foreground">{t('detail.snapScheduleDesc')}</p>
               </div>
               <Badge variant={snapConfig.enabled ? 'success' : 'outline'}>
-                {snapConfig.enabled ? 'SCHEDULE ACTIVE' : 'SCHEDULE DISABLED'}
+                {snapConfig.enabled ? t('detail.scheduleActive') : t('detail.scheduleDisabled')}
               </Badge>
             </div>
 
             <form onSubmit={handleSaveSnapSchedule} className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-sans items-end">
               <div className="space-y-1">
-                <label className="block text-foreground font-medium">Status Otomatisasi</label>
+                <label className="block text-foreground font-medium">{t('detail.snapAuto')}</label>
                 <div className="flex items-center gap-2 pt-2">
                   <input
                     type="checkbox"
@@ -442,43 +449,43 @@ export function LXDDetailPage() {
                     className="accent-primary size-4"
                   />
                   <label htmlFor="chk_snap_sched_enable" className="text-xs text-foreground cursor-pointer font-bold">
-                    Enable Snapshot Schedule
+                    {t('detail.enableSchedule')}
                   </label>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="block text-foreground font-medium">Frekuensi Backup (Cron Schedule)</label>
+                <label className="block text-foreground font-medium">{t('detail.snapFreq')}</label>
                 <Select
                   value={snapConfig.schedule_cron}
                   onChange={e => setSnapConfig({ ...snapConfig, schedule_cron: e.target.value })}
                   disabled={!snapConfig.enabled}
                 >
-                  <option value="0 * * * *">⏱️ Setiap Jam (Hourly)</option>
-                  <option value="0 0 * * *">🌙 Setiap Hari (Daily at 00:00)</option>
-                  <option value="0 0 * * 0">📅 Setiap Minggu (Weekly on Sunday)</option>
-                  <option value="0 0 1 * *">🗓️ Setiap Bulan (Monthly 1st)</option>
+                  <option value="0 * * * *">⏱️ {t('detail.hourly')}</option>
+                  <option value="0 0 * * *">🌙 {t('detail.daily')}</option>
+                  <option value="0 0 * * 0">📅 {t('detail.weekly')}</option>
+                  <option value="0 0 1 * *">🗓️ {t('detail.monthly')}</option>
                 </Select>
               </div>
 
               <div className="space-y-1">
-                <label className="block text-foreground font-medium">Masa Simpan (Retention Expiry)</label>
+                <label className="block text-foreground font-medium">{t('detail.snapRetention')}</label>
                 <Select
                   value={snapConfig.retention_days}
                   onChange={e => setSnapConfig({ ...snapConfig, retention_days: parseInt(e.target.value) || 7 })}
                   disabled={!snapConfig.enabled}
                 >
-                  <option value={3}>3 Hari (Hapus otomatis setelah 3 hari)</option>
-                  <option value={7}>7 Hari (Hapus otomatis setelah 1 minggu)</option>
-                  <option value={14}>14 Hari (Hapus otomatis setelah 2 minggu)</option>
-                  <option value={30}>30 Hari (Hapus otomatis setelah 1 bulan)</option>
+                  <option value={3}>{t('detail.retention3')}</option>
+                  <option value={7}>{t('detail.retention7')}</option>
+                  <option value={14}>{t('detail.retention14')}</option>
+                  <option value={30}>{t('detail.retention30')}</option>
                 </Select>
               </div>
 
               <div className="sm:col-span-3 pt-2 flex justify-end">
                 <Button type="submit" disabled={loadingAction === 'save_snap_schedule'}>
-                  {loadingAction === 'save_snap_schedule' ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : <Save className="size-3.5" data-icon="inline-start" />}
-                  <span>{loadingAction === 'save_snap_schedule' ? 'Menyimpan...' : 'Simpan Pengaturan Jadwal Snapshot'}</span>
+                  {loadingAction === 'save_snap_schedule' ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <Save className="size-3.5 mr-1.5" />}
+                  <span>{loadingAction === 'save_snap_schedule' ? t('detail.saving') : t('detail.saveSchedule')}</span>
                 </Button>
               </div>
             </form>
@@ -487,33 +494,33 @@ export function LXDDetailPage() {
           <Card className="p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-3">
               <div>
-                <h3 className="text-sm font-bold text-foreground">Manual Instant Snapshot & Restoration</h3>
-                <p className="text-xs text-muted-foreground">Buat snapshot instan sewaktu-waktu atau restore kondisi container dengan 1 klik</p>
+                <h3 className="text-sm font-bold text-foreground">{t('detail.manualSnapshot')}</h3>
+                <p className="text-xs text-muted-foreground">{t('detail.manualSnapshotDesc')}</p>
               </div>
 
               <form onSubmit={handleCreateSnapshot} className="flex gap-2 w-full sm:w-auto">
                 <Input
                   type="text"
-                  placeholder="Nama snapshot (misal: pre-update-v1)"
+                  placeholder={t('detail.snapPlaceholder')}
                   value={newSnapName}
                   onChange={e => setNewSnapName(e.target.value)}
                   className="w-48 text-xs font-mono"
                 />
                 <Button type="submit" size="sm" disabled={loadingAction === 'create_snapshot'}>
-                  {loadingAction === 'create_snapshot' && <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />}
-                  <span>{loadingAction === 'create_snapshot' ? 'Membuat...' : '📸 Take Snapshot Now'}</span>
+                  {loadingAction === 'create_snapshot' && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+                  <span>{loadingAction === 'create_snapshot' ? t('detail.snapCreating') : `📸 ${t('detail.snapNow')}`}</span>
                 </Button>
               </form>
             </div>
 
             <div className="space-y-2 pt-1">
               <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
-                Daftar Snapshot Container ({snapshots.length})
+                {t('detail.snapList', { n: snapshots.length })}
               </h4>
 
               {snapshots.length === 0 ? (
                 <div className="p-8 text-center text-xs font-mono text-muted-foreground border border-dashed border-border rounded-lg">
-                  Belum ada snapshot yang tersimpan. Klik 'Take Snapshot Now' di atas untuk membuat backup instan.
+                  {t('detail.noSnapshots')}
                 </div>
               ) : (
                 <div className="divide-y divide-border border border-border rounded-md overflow-hidden">
@@ -523,17 +530,17 @@ export function LXDDetailPage() {
                         <p className="text-foreground font-bold flex items-center gap-2">
                           <span>📸 {s.name}</span>
                         </p>
-                        <p className="text-[11px] text-muted-foreground">Dibuat pada: {s.created_at}</p>
+                        <p className="text-[11px] text-muted-foreground">{t('detail.snapCreated', { date: s.created_at })}</p>
                       </div>
 
                       <div className="flex items-center gap-2 font-sans">
                         <Button size="sm" variant="outline" onClick={() => promptRestoreSnapshot(s.name)} disabled={!!loadingAction}>
-                          {loadingAction === `restore_${s.name}` ? <Loader2 className="size-3.5 animate-spin text-emerald-400" data-icon="inline-start" /> : <RotateCcw className="size-3.5 text-emerald-400" data-icon="inline-start" />}
-                          <span>{loadingAction === `restore_${s.name}` ? 'Restoring...' : 'Restore'}</span>
+                          {loadingAction === `restore_${s.name}` ? <Loader2 className="size-3.5 animate-spin text-emerald-400 mr-1.5" /> : <RotateCcw className="size-3.5 text-emerald-400 mr-1.5" />}
+                          <span>{loadingAction === `restore_${s.name}` ? 'Restoring...' : t('detail.restore')}</span>
                         </Button>
                         <Button size="sm" variant="destructive" onClick={() => promptDeleteSnapshot(s.name)} disabled={!!loadingAction}>
-                          {loadingAction === `delete_${s.name}` ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : <Trash2 className="size-3.5" data-icon="inline-start" />}
-                          <span>{loadingAction === `delete_${s.name}` ? 'Deleting...' : 'Delete'}</span>
+                          {loadingAction === `delete_${s.name}` ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <Trash2 className="size-3.5 mr-1.5" />}
+                          <span>{loadingAction === `delete_${s.name}` ? 'Deleting...' : t('common.delete')}</span>
                         </Button>
                       </div>
                     </div>
@@ -559,7 +566,7 @@ export function LXDDetailPage() {
         </Card>
       </div>
 
-      {/* Custom Shadcn Confirmation Modal */}
+      {/* Confirmation Modal */}
       <ConfirmDialog
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
@@ -572,3 +579,5 @@ export function LXDDetailPage() {
     </div>
   );
 }
+
+export default LXDDetailPage;

@@ -2,14 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button, Badge, Input, Select } from '../ui/primitives';
 import {
-  Sparkles, ChevronRight, Check, X, Loader2, CheckCircle2,
+  Sparkles, Check, X, Loader2, CheckCircle2,
   Server, Cpu, HardDrive, Layers, Key, ArrowLeft, ArrowRight, ShieldCheck, Box
 } from 'lucide-react';
+import { useI18n } from '../../i18n';
 
 export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [step, setStep] = useState(1);
   const [sshKeys, setSshKeys] = useState([]);
+  const [storagePools, setStoragePools] = useState([]);
+  const [networks, setNetworks] = useState([]);
   const [form, setForm] = useState({
     node_id: nodes[0]?.id || 'local-master',
     name: '',
@@ -20,7 +24,13 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
     disk_gb: 20,
     autostart: true,
     ssh_key: '',
-    template_preset: 'none'
+    template_preset: 'none',
+    storage_pool: '',
+    network: '',
+    privileged: false,
+    nesting: true,
+    cpu_allowance: '',
+    memory_swap: true
   });
 
   // Custom Input Toggles
@@ -36,6 +46,26 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
     fetch('/api/ssh-keys')
       .then(r => r.json())
       .then(data => Array.isArray(data) && setSshKeys(data))
+      .catch(console.error);
+
+    fetch('/api/storage-pools')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setStoragePools(data);
+          setForm(prev => ({ ...prev, storage_pool: prev.storage_pool || (data[0]?.name || 'default') }));
+        }
+      })
+      .catch(console.error);
+
+    fetch('/api/networks')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setNetworks(data);
+          setForm(prev => ({ ...prev, network: prev.network || (data[0]?.name || 'lxdbr0') }));
+        }
+      })
       .catch(console.error);
 
     fetch('/api/settings')
@@ -57,7 +87,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
   const targetNodeName = targetNode?.name || form.node_id;
 
   const appendLog = (msg) => {
-    const timeStr = new Date().toLocaleTimeString('id-ID', { hour12: false });
+    const timeStr = new Date().toLocaleTimeString([], { hour12: false });
     setDeployLogs(prev => [...prev, { id: Date.now() + Math.random(), text: msg, timestamp: timeStr }]);
   };
 
@@ -68,7 +98,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return addToast('error', 'Nama container wajib diisi!');
+    if (!form.name.trim()) return addToast('error', t('wizard.nameRequired'));
 
     setIsDeploying(true);
     setDeployLogs([]);
@@ -130,39 +160,39 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
           onRefresh();
         }, 1000);
       } else {
-        addToast('error', 'Deployment gagal. Periksa log terminal!');
+        addToast('error', t('wizard.deployFailed'));
         setTimeout(() => setIsDeploying(false), 2000);
       }
     } catch (e) {
-      appendLog(`❌ Network Error: ${e.message}`);
+      appendLog(`❌ ${t('wizard.networkError', { msg: e.message })}`);
       addToast('error', e.message);
       setTimeout(() => setIsDeploying(false), 2000);
     }
   };
 
   const imagesList = [
-    { id: 'ubuntu:24.04', title: 'Ubuntu 24.04 LTS', icon: '🚀', tag: 'Recommended', desc: 'Rilis LTS terbaru, sangat direkomendasikan' },
-    { id: 'ubuntu:22.04', title: 'Ubuntu 22.04 LTS', icon: '🐧', tag: 'Stable', desc: 'Versi LTS populer, stabil untuk aplikasi umum' },
-    { id: 'images:debian/12', title: 'Debian 12 Bookworm', icon: '🌀', tag: 'Lightweight', desc: 'Ringan, stabil, hemat pemakaian RAM' },
-    { id: 'images:alpine/edge', title: 'Alpine Linux (Latest)', icon: '🏔️', tag: 'Ultra Small', desc: 'Ukuran footprint sangat mini (~3MB - 5MB RAM)' },
-    { id: 'images:almalinux/9', title: 'AlmaLinux 9 Enterprise', icon: '🔴', tag: 'RHEL Compatible', desc: 'Enterprise Linux stabil pengganti CentOS' }
+    { id: 'ubuntu:24.04', title: t('img.ubuntu2404'), icon: '🚀', tag: t('img.tagRecommended'), desc: t('img.descUbuntu24') },
+    { id: 'ubuntu:22.04', title: t('img.ubuntu2204'), icon: '🐧', tag: t('img.tagStable'), desc: t('img.descUbuntu22') },
+    { id: 'images:debian/12', title: t('img.debian12'), icon: '🌀', tag: t('img.tagLightweight'), desc: t('img.descDebian12') },
+    { id: 'images:alpine/edge', title: t('img.alpine'), icon: '🏔️', tag: t('img.tagUltraSmall'), desc: t('img.descAlpine') },
+    { id: 'images:almalinux/9', title: t('img.almalinux9'), icon: '🔴', tag: t('img.tagRhel'), desc: t('img.descAlmaLinux9') }
   ];
 
   const appTemplates = [
-    { id: 'none', title: 'Clean OS', icon: '📦', desc: 'Sistem operasi murni tanpa aplikasi tambahan' },
-    { id: 'docker', title: 'Docker Host', icon: '🚀', desc: 'Pre-installed Docker Engine & Docker Compose' },
-    { id: 'nginx', title: 'Nginx Web Server', icon: '🌐', desc: 'Pre-installed Nginx HTTP/2 webserver' },
-    { id: 'nodejs', title: 'Node.js & PM2', icon: '⚡', desc: 'Node.js 22 LTS & PM2 Process Manager' },
-    { id: 'python', title: 'Python 3 Environment', icon: '🐍', desc: 'Python 3, virtualenv, & pip package manager' }
+    { id: 'none', title: t('tpl.clean'), icon: '📦', desc: t('tpl.cleanDesc') },
+    { id: 'docker', title: t('tpl.docker'), icon: '🚀', desc: t('tpl.dockerDesc') },
+    { id: 'nginx', title: t('tpl.nginx'), icon: '🌐', desc: t('tpl.nginxDesc') },
+    { id: 'nodejs', title: t('tpl.nodejs'), icon: '⚡', desc: t('tpl.nodejsDesc') },
+    { id: 'python', title: t('tpl.python'), icon: '🐍', desc: t('tpl.pythonDesc') }
   ];
 
   const stepTitles = {
-    1: 'Target Node & Instance Name',
-    2: 'Operating System Selection',
-    3: 'Hardware Resource Limits',
-    4: 'Access & SSH Key Injection',
-    5: 'App Bootstrap Template',
-    6: 'Summary Review & Deployment'
+    1: t('wizard.stepTitle1'),
+    2: t('wizard.stepTitle2'),
+    3: t('wizard.stepTitle3'),
+    4: t('wizard.stepTitle4'),
+    5: t('wizard.stepTitle5'),
+    6: t('wizard.stepTitle6')
   };
 
   return (
@@ -174,32 +204,34 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
             <div className="inline-flex items-center justify-center size-14 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
               <CheckCircle2 className="size-8 text-emerald-400" />
             </div>
-            <h3 className="text-xl font-bold text-foreground tracking-tight">LXD Container Berhasil Dideploy! 🎉</h3>
+            <h3 className="text-xl font-bold text-foreground tracking-tight">{t('wizard.successTitle')} 🎉</h3>
             <p className="text-xs text-muted-foreground">
-              Container <span className="font-mono text-primary font-bold">{createdSuccessData.name}</span> telah aktif berjalan di Node Server <span className="font-mono text-foreground font-bold">{createdSuccessData.node_name}</span>.
+              {t('wizard.successMsg', { name: createdSuccessData.name, node: createdSuccessData.node_name })}
             </p>
           </div>
 
           <div className="p-4 bg-background rounded-lg border border-border space-y-2 font-mono text-xs">
             <div className="flex justify-between border-b border-border/50 pb-1.5">
-              <span className="text-muted-foreground">Nama Instance:</span>
+              <span className="text-muted-foreground">{t('wizard.containerName')}</span>
               <span className="text-foreground font-bold">{createdSuccessData.name}</span>
             </div>
             <div className="flex justify-between border-b border-border/50 pb-1.5">
-              <span className="text-muted-foreground">Target Node:</span>
+              <span className="text-muted-foreground">{t('wizard.targetNode')}</span>
               <span className="text-foreground">{createdSuccessData.node_name}</span>
             </div>
             <div className="flex justify-between border-b border-border/50 pb-1.5">
-              <span className="text-muted-foreground">OS Image:</span>
+              <span className="text-muted-foreground">{t('wizard.osLabel')}</span>
               <span className="text-foreground">{createdSuccessData.image}</span>
             </div>
             <div className="flex justify-between border-b border-border/50 pb-1.5">
-              <span className="text-muted-foreground">Spesifikasi Resource:</span>
-              <span className="text-emerald-400 font-bold">{createdSuccessData.ram_gb} GB RAM | {createdSuccessData.cpu_cores} Cores | {createdSuccessData.disk_gb} GB Disk</span>
+              <span className="text-muted-foreground">{t('wizard.hwSpecs')}</span>
+              <span className="text-emerald-400 font-bold">
+                {createdSuccessData.ram_gb} GB RAM | {createdSuccessData.cpu_cores} Cores | {createdSuccessData.disk_gb} GB Disk
+              </span>
             </div>
             {createdSuccessData.template_preset !== 'none' && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Template App:</span>
+                <span className="text-muted-foreground">{t('wizard.templatePreset')}</span>
                 <span className="text-amber-400 font-bold">{createdSuccessData.template_preset.toUpperCase()}</span>
               </div>
             )}
@@ -213,16 +245,16 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                 navigate(`/lxds/${createdSuccessData.node_id}/${createdSuccessData.name}`);
               }}
             >
-              <Layers className="size-4" data-icon="inline-start" />
-              <span>Kelola LXD Detail</span>
+              <Layers className="size-4 mr-1.5" />
+              <span>{t('wizard.manageDetail')}</span>
             </Button>
             <Button
               onClick={() => {
                 onClose();
               }}
             >
-              <Check className="size-4" data-icon="inline-start" />
-              <span>Selesai & Tutup</span>
+              <Check className="size-4 mr-1.5" />
+              <span>{t('wizard.doneClose')}</span>
             </Button>
           </div>
         </Card>
@@ -236,9 +268,9 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                 <div className="inline-flex items-center justify-center size-12 rounded-full bg-primary/10 text-primary border border-primary/20">
                   <Loader2 className="size-7 animate-spin text-primary" />
                 </div>
-                <h3 className="text-base font-bold text-foreground">Memproses Deployment LXD Container...</h3>
+                <h3 className="text-base font-bold text-foreground">{t('wizard.deploying')}</h3>
                 <p className="text-xs text-muted-foreground">
-                  Container <span className="font-mono text-primary font-bold">{form.name}</span> sedang disiapkan di Node <span className="font-mono text-foreground">{targetNodeName}</span>
+                  {t('wizard.deployingDesc', { name: form.name, node: targetNodeName })}
                 </p>
               </div>
 
@@ -253,7 +285,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
               </div>
 
               <div className="text-center">
-                <p className="text-[11px] font-mono text-muted-foreground">Harap tunggu, proses ini membutuhkan waktu beberapa detik...</p>
+                <p className="text-[11px] font-mono text-muted-foreground">{t('wizard.wait')}</p>
               </div>
             </div>
           )}
@@ -263,9 +295,11 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
             <div>
               <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                 <Sparkles className="size-5 text-primary" />
-                <span>Create LXD Container Wizard</span>
+                <span>{t('wizard.title')}</span>
               </h3>
-              <p className="text-xs text-muted-foreground">Langkah {step} dari 6: <span className="font-semibold text-foreground">{stepTitles[step]}</span></p>
+              <p className="text-xs text-muted-foreground">
+                {t('wizard.stepOf', { current: step, total: 6, title: stepTitles[step] })}
+              </p>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose} disabled={isDeploying}><X className="size-5" /></Button>
           </div>
@@ -273,12 +307,12 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
           {/* 6-Step Pill Progress Navigation Bar */}
           <div className="grid grid-cols-6 gap-1.5 font-mono text-[10px]">
             {[
-              { num: 1, label: 'Node' },
-              { num: 2, label: 'OS' },
-              { num: 3, label: 'Specs' },
-              { num: 4, label: 'Access' },
-              { num: 5, label: 'Template' },
-              { num: 6, label: 'Review' }
+              { num: 1, label: t('wizard.stepNode') },
+              { num: 2, label: t('wizard.stepOs') },
+              { num: 3, label: t('wizard.stepSpecs') },
+              { num: 4, label: t('wizard.stepAccess') },
+              { num: 5, label: t('wizard.stepTemplate') },
+              { num: 6, label: t('wizard.stepReview') }
             ].map(s => (
               <div
                 key={s.num}
@@ -305,7 +339,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
               <div className="space-y-2">
                 <label className="block text-foreground font-semibold flex items-center gap-2">
                   <Server className="size-4 text-cyan-400" />
-                  <span>Pilih Target Node Server</span>
+                  <span>{t('wizard.node')}</span>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-1">
                   {nodes.map(n => {
@@ -326,7 +360,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                           </div>
                           <p className="text-[10px] font-mono text-muted-foreground">IP: {n.ip || '127.0.0.1'} | {lxdsCount} LXDs Active</p>
                         </div>
-                        {n.is_master ? <Badge variant="info">MASTER</Badge> : <Badge variant="outline">WORKER</Badge>}
+                        {n.is_master ? <Badge variant="info">{t('common.master')}</Badge> : <Badge variant="outline">{t('common.worker')}</Badge>}
                       </div>
                     );
                   })}
@@ -334,25 +368,25 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-foreground font-semibold">Nama Container LXD</label>
+                <label className="block text-foreground font-semibold">{t('wizard.nodeName')}</label>
                 <Input
                   type="text"
-                  placeholder="misal: web-app-prod"
+                  placeholder={t('wizard.nodeNamePlaceholder')}
                   value={form.name}
                   onChange={(e) => handleNameChange(e.target.value)}
                   required
                   autoFocus
                 />
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono">
-                  <span>Slug otomatis: <span className="text-primary font-bold">{form.name || 'web-container'}</span></span>
-                  <span>Huruf kecil, angka, dash (-)</span>
+                  <span>{t('wizard.slug', { slug: form.name || 'web-container' })}</span>
+                  <span>{t('wizard.nodeNameHint')}</span>
                 </div>
               </div>
 
               <div className="pt-4 flex justify-end border-t border-border">
-                <Button onClick={() => form.name ? setStep(2) : addToast('error', 'Nama container wajib diisi!')}>
-                  <span>Lanjut: Pilih OS Image</span>
-                  <ArrowRight className="size-4" data-icon="inline-end" />
+                <Button onClick={() => form.name ? setStep(2) : addToast('error', t('wizard.nameRequired'))}>
+                  <span>{t('wizard.nextNode')}</span>
+                  <ArrowRight className="size-4 ml-1.5" />
                 </Button>
               </div>
             </div>
@@ -361,9 +395,34 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
           {/* ── STEP 2: OPERATING SYSTEM SELECTION ────────────────────────────────── */}
           {step === 2 && (
             <div className="space-y-4 text-xs font-sans animate-fade-in">
+              <div className="space-y-2">
+                <label className="block text-foreground font-semibold flex items-center gap-2">
+                  <Box className="size-4 text-primary" />
+                  <span>{t('wizard.instanceType')}</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { id: 'container', title: t('wizard.container'), icon: '📦', desc: t('wizard.containerDesc') },
+                    { id: 'virtual-machine', title: t('wizard.vm'), icon: '🖥️', desc: t('wizard.vmDesc') }
+                  ].map(item => (
+                    <div
+                      key={item.id}
+                      onClick={() => setForm({ ...form, type: item.id })}
+                      className={`p-3.5 rounded-xl border transition cursor-pointer ${form.type === item.id ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary' : 'border-border bg-background hover:bg-accent'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{item.icon}</span>
+                        <span className="font-bold text-foreground text-xs">{item.title}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1 font-sans">{item.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <label className="block text-foreground font-semibold flex items-center gap-2">
                 <Box className="size-4 text-primary" />
-                <span>Pilih Sistem Operasi (OS Image)</span>
+                <span>{t('wizard.os')}</span>
               </label>
               <div className="grid grid-cols-1 gap-2.5 max-h-[320px] overflow-y-auto pr-1">
                 {imagesList.map((img) => (
@@ -385,7 +444,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                           <span className="font-bold text-foreground text-xs">{img.title}</span>
                           <Badge variant={form.image === img.id ? 'info' : 'outline'}>{img.tag}</Badge>
                         </div>
-                        <p className="text-[11px] text-muted-foreground">{img.desc}</p>
+                        <p className="text-[11px] text-muted-foreground font-sans">{img.desc}</p>
                       </div>
                     </div>
                     {form.image === img.id && <Check className="size-5 text-primary shrink-0" />}
@@ -405,10 +464,10 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-foreground text-xs">Custom OS Image Alias / Remote</span>
-                          <Badge variant="outline">Advanced</Badge>
+                          <span className="font-bold text-foreground text-xs">{t('wizard.osCustom')}</span>
+                          <Badge variant="outline">{t('img.tagAdvanced')}</Badge>
                         </div>
-                        <p className="text-[11px] text-muted-foreground">Ketik alias image LXD bebas dari remote images: atau ubuntu:</p>
+                        <p className="text-[11px] text-muted-foreground font-sans">{t('wizard.osCustomDesc')}</p>
                       </div>
                     </div>
                     {!imagesList.some(i => i.id === form.image) && <Check className="size-5 text-primary shrink-0" />}
@@ -416,10 +475,10 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
 
                   {!imagesList.some(i => i.id === form.image) && (
                     <div className="pt-2 flex items-center gap-2 border-t border-border/50 animate-fade-in">
-                      <span className="text-[11px] text-muted-foreground font-mono">Image String:</span>
+                      <span className="text-[11px] text-muted-foreground font-mono">{t('wizard.osCustomHint')}</span>
                       <Input
                         type="text"
-                        placeholder="misal: images:rockylinux/9 atau images:archlinux"
+                        placeholder={t('wizard.imagePlaceholder')}
                         value={form.image}
                         onChange={(e) => setForm({ ...form, image: e.target.value })}
                         className="h-8 text-xs font-mono flex-1"
@@ -432,12 +491,12 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
 
               <div className="pt-4 flex items-center justify-between border-t border-border">
                 <Button variant="outline" onClick={() => setStep(1)}>
-                  <ArrowLeft className="size-4" data-icon="inline-start" />
-                  <span>Kembali</span>
+                  <ArrowLeft className="size-4 mr-1.5" />
+                  <span>{t('wizard.back')}</span>
                 </Button>
                 <Button onClick={() => setStep(3)}>
-                  <span>Lanjut: Hardware Specs</span>
-                  <ArrowRight className="size-4" data-icon="inline-end" />
+                  <span>{t('wizard.nextHardware')}</span>
+                  <ArrowRight className="size-4 ml-1.5" />
                 </Button>
               </div>
             </div>
@@ -447,14 +506,14 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
           {step === 3 && (
             <div className="space-y-4 text-xs font-sans animate-fade-in">
               <div className="space-y-4 max-h-[340px] overflow-y-auto pr-1">
-                {/* Hardware Spec 1: RAM Limit with Clean Custom Toggle */}
+                {/* Hardware Spec 1: RAM Limit */}
                 <div className="space-y-2 bg-background p-3.5 rounded-xl border border-border">
                   <label className="block text-foreground font-semibold flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <Cpu className="size-4 text-purple-400" />
-                      <span>RAM Memory Limit</span>
+                      <span>{t('wizard.ramLabel')}</span>
                     </span>
-                    <span className="font-mono text-primary font-bold">{form.ram_gb} GB RAM</span>
+                    <span className="font-mono text-primary font-bold">{t('wizard.ramValue', { n: form.ram_gb })}</span>
                   </label>
 
                   <div className="grid grid-cols-6 gap-1.5">
@@ -484,13 +543,13 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                           : 'bg-card text-muted-foreground border-border hover:bg-accent'
                       }`}
                     >
-                      Custom...
+                      {t('wizard.custom')}
                     </button>
                   </div>
 
                   {customRamActive && (
                     <div className="pt-2 flex items-center gap-2 animate-fade-in border-t border-border/50">
-                      <span className="text-[11px] text-muted-foreground font-mono">Ketik RAM kustom:</span>
+                      <span className="text-[11px] text-muted-foreground font-mono">{t('wizard.ramCustom')}</span>
                       <Input
                         type="number"
                         min="1"
@@ -505,14 +564,14 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                   )}
                 </div>
 
-                {/* Hardware Spec 2: CPU Cores with Clean Custom Toggle */}
+                {/* Hardware Spec 2: CPU Cores */}
                 <div className="space-y-2 bg-background p-3.5 rounded-xl border border-border">
                   <label className="block text-foreground font-semibold flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <Cpu className="size-4 text-amber-400" />
-                      <span>CPU Cores Allowance</span>
+                      <span>{t('wizard.cpuLabel')}</span>
                     </span>
-                    <span className="font-mono text-amber-400 font-bold">{form.cpu_cores} Cores</span>
+                    <span className="font-mono text-amber-400 font-bold">{t('wizard.coreValue', { n: form.cpu_cores })}</span>
                   </label>
 
                   <div className="grid grid-cols-5 gap-1.5">
@@ -542,13 +601,13 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                           : 'bg-card text-muted-foreground border-border hover:bg-accent'
                       }`}
                     >
-                      Custom...
+                      {t('wizard.custom')}
                     </button>
                   </div>
 
                   {customCpuActive && (
                     <div className="pt-2 flex items-center gap-2 animate-fade-in border-t border-border/50">
-                      <span className="text-[11px] text-muted-foreground font-mono">Ketik CPU Cores kustom:</span>
+                      <span className="text-[11px] text-muted-foreground font-mono">{t('wizard.cpuCustom')}</span>
                       <Input
                         type="number"
                         min="1"
@@ -563,14 +622,14 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                   )}
                 </div>
 
-                {/* Hardware Spec 3: Disk Storage Quota with Clean Custom Toggle */}
+                {/* Hardware Spec 3: Disk Storage Quota */}
                 <div className="space-y-2 bg-background p-3.5 rounded-xl border border-border">
                   <label className="block text-foreground font-semibold flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <HardDrive className="size-4 text-cyan-400" />
-                      <span>Disk Storage Quota</span>
+                      <span>{t('wizard.diskLabel')}</span>
                     </span>
-                    <span className="font-mono text-cyan-400 font-bold">{form.disk_gb} GB Storage</span>
+                    <span className="font-mono text-cyan-400 font-bold">{t('wizard.diskValue', { n: form.disk_gb })}</span>
                   </label>
 
                   <div className="grid grid-cols-5 gap-1.5">
@@ -600,13 +659,13 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                           : 'bg-card text-muted-foreground border-border hover:bg-accent'
                       }`}
                     >
-                      Custom...
+                      {t('wizard.custom')}
                     </button>
                   </div>
 
                   {customDiskActive && (
                     <div className="pt-2 flex items-center gap-2 animate-fade-in border-t border-border/50">
-                      <span className="text-[11px] text-muted-foreground font-mono">Ketik Storage kustom:</span>
+                      <span className="text-[11px] text-muted-foreground font-mono">{t('wizard.diskCustom')}</span>
                       <Input
                         type="number"
                         min="5"
@@ -622,14 +681,39 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1.5">
+                  <label className="block text-foreground font-semibold flex items-center gap-1.5">
+                    <HardDrive className="size-3.5 text-cyan-400" />
+                    <span>{t('wizard.storagePool')}</span>
+                  </label>
+                  <Select value={form.storage_pool} onChange={(e) => setForm({ ...form, storage_pool: e.target.value })}>
+                    {(storagePools.length ? storagePools : [{ name: 'default', driver: 'dir' }]).map(p => (
+                      <option key={p.name} value={p.name}>{p.name} ({p.driver})</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-foreground font-semibold flex items-center gap-1.5">
+                    <Server className="size-3.5 text-emerald-400" />
+                    <span>{t('wizard.networkBridge')}</span>
+                  </label>
+                  <Select value={form.network} onChange={(e) => setForm({ ...form, network: e.target.value })}>
+                    {(networks.length ? networks : [{ name: 'lxdbr0', type: 'bridge' }]).map(n => (
+                      <option key={n.name} value={n.name}>{n.name} ({n.type})</option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+
               <div className="pt-4 flex items-center justify-between border-t border-border">
                 <Button variant="outline" onClick={() => setStep(2)}>
-                  <ArrowLeft className="size-4" data-icon="inline-start" />
-                  <span>Kembali</span>
+                  <ArrowLeft className="size-4 mr-1.5" />
+                  <span>{t('wizard.back')}</span>
                 </Button>
                 <Button onClick={() => setStep(4)}>
-                  <span>Lanjut: Access & SSH</span>
-                  <ArrowRight className="size-4" data-icon="inline-end" />
+                  <span>{t('wizard.nextAccess')}</span>
+                  <ArrowRight className="size-4 ml-1.5" />
                 </Button>
               </div>
             </div>
@@ -641,10 +725,10 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
               <div className="space-y-2">
                 <label className="block text-foreground font-semibold flex items-center gap-2">
                   <Key className="size-4 text-amber-400" />
-                  <span>Pilih SSH Public Key (Injeksi Login Otomatis)</span>
+                  <span>{t('wizard.sshKey')}</span>
                 </label>
-                <p className="text-xs text-muted-foreground">
-                  Pilih kunci SSH publik terdaftar untuk otomatis diautorisasi di <span className="font-mono text-foreground">/root/.ssh/authorized_keys</span> saat container pertama kali menyala.
+                <p className="text-xs text-muted-foreground font-sans">
+                  {t('wizard.sshKeyDesc')}
                 </p>
               </div>
 
@@ -655,7 +739,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                     form.ssh_key === '' ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary' : 'border-border bg-background hover:bg-accent'
                   }`}
                 >
-                  <span className="font-medium text-foreground">-- Tanpa Injeksi SSH Key (Login Password Biasa) --</span>
+                  <span className="font-medium text-foreground">{t('wizard.noSsh')}</span>
                   {form.ssh_key === '' && <Check className="size-4 text-primary shrink-0" />}
                 </div>
 
@@ -680,12 +764,12 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
 
               <div className="pt-4 flex items-center justify-between border-t border-border">
                 <Button variant="outline" onClick={() => setStep(3)}>
-                  <ArrowLeft className="size-4" data-icon="inline-start" />
-                  <span>Kembali</span>
+                  <ArrowLeft className="size-4 mr-1.5" />
+                  <span>{t('wizard.back')}</span>
                 </Button>
                 <Button onClick={() => setStep(5)}>
-                  <span>Lanjut: App Template</span>
-                  <ArrowRight className="size-4" data-icon="inline-end" />
+                  <span>{t('wizard.nextTemplate')}</span>
+                  <ArrowRight className="size-4 ml-1.5" />
                 </Button>
               </div>
             </div>
@@ -697,9 +781,9 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
               <div className="space-y-1">
                 <label className="block text-foreground font-semibold flex items-center gap-2">
                   <Sparkles className="size-4 text-primary" />
-                  <span>Pilih Preset Template Aplikasi (Cloud-Init Auto Install)</span>
+                  <span>{t('wizard.template')}</span>
                 </label>
-                <p className="text-xs text-muted-foreground">Otomatis mendownload dan mengonfigurasi stack aplikasi siap pakai saat booting pertama.</p>
+                <p className="text-xs text-muted-foreground font-sans">{t('wizard.templateDesc')}</p>
               </div>
 
               <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-1">
@@ -717,7 +801,7 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                       </div>
                       <div className="space-y-0.5">
                         <span className="font-bold text-foreground text-xs">{tpl.title}</span>
-                        <p className="text-[11px] text-muted-foreground">{tpl.desc}</p>
+                        <p className="text-[11px] text-muted-foreground font-sans">{tpl.desc}</p>
                       </div>
                     </div>
                     {form.template_preset === tpl.id && <Check className="size-5 text-primary shrink-0" />}
@@ -727,12 +811,12 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
 
               <div className="pt-4 flex items-center justify-between border-t border-border">
                 <Button variant="outline" onClick={() => setStep(4)}>
-                  <ArrowLeft className="size-4" data-icon="inline-start" />
-                  <span>Kembali</span>
+                  <ArrowLeft className="size-4 mr-1.5" />
+                  <span>{t('wizard.back')}</span>
                 </Button>
                 <Button onClick={() => setStep(6)}>
-                  <span>Lanjut: Review Summary</span>
-                  <ArrowRight className="size-4" data-icon="inline-end" />
+                  <span>{t('wizard.nextReview')}</span>
+                  <ArrowRight className="size-4 ml-1.5" />
                 </Button>
               </div>
             </div>
@@ -744,36 +828,44 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
               <div className="space-y-2">
                 <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                   <ShieldCheck className="size-4 text-emerald-400" />
-                  <span>Konfirmasi Ringkasan Deployment Container</span>
+                  <span>{t('wizard.review')}</span>
                 </h4>
-                <p className="text-xs text-muted-foreground">Periksa seluruh konfigurasi sebelum meluncurkan container LXD ke kluster.</p>
+                <p className="text-xs text-muted-foreground font-sans">{t('wizard.reviewDesc')}</p>
               </div>
 
               <div className="p-4 bg-background rounded-xl border border-border space-y-2.5 font-mono text-xs shadow-inner">
                 <div className="flex justify-between border-b border-border/50 pb-1.5">
-                  <span className="text-muted-foreground">Nama Container LXD:</span>
+                  <span className="text-muted-foreground">{t('wizard.containerName')}</span>
                   <span className="text-primary font-bold text-sm">{form.name}</span>
                 </div>
                 <div className="flex justify-between border-b border-border/50 pb-1.5">
-                  <span className="text-muted-foreground">Target Node Server:</span>
+                  <span className="text-muted-foreground">{t('wizard.targetNode')}</span>
                   <span className="text-foreground font-bold">{targetNodeName} ({targetNode?.ip || '127.0.0.1'})</span>
                 </div>
                 <div className="flex justify-between border-b border-border/50 pb-1.5">
-                  <span className="text-muted-foreground">Sistem Operasi (OS):</span>
+                  <span className="text-muted-foreground">{t('wizard.osLabel')}</span>
                   <span className="text-foreground">{form.image}</span>
                 </div>
                 <div className="flex justify-between border-b border-border/50 pb-1.5">
-                  <span className="text-muted-foreground">Alokasi Hardware Specs:</span>
+                  <span className="text-muted-foreground">{t('wizard.instanceTypeLabel')}</span>
+                  <span className="text-foreground font-bold">{form.type === 'virtual-machine' ? t('wizard.vm') : t('wizard.container')}</span>
+                </div>
+                <div className="flex justify-between border-b border-border/50 pb-1.5">
+                  <span className="text-muted-foreground">{t('wizard.storageNetwork')}</span>
+                  <span className="text-cyan-400 font-bold">{form.storage_pool || 'default'} / {form.network || 'lxdbr0'}</span>
+                </div>
+                <div className="flex justify-between border-b border-border/50 pb-1.5">
+                  <span className="text-muted-foreground">{t('wizard.hwSpecs')}</span>
                   <span className="text-emerald-400 font-bold">{form.ram_gb} GB RAM | {form.cpu_cores} Cores | {form.disk_gb} GB Storage</span>
                 </div>
                 <div className="flex justify-between border-b border-border/50 pb-1.5">
-                  <span className="text-muted-foreground">Preset App Template:</span>
+                  <span className="text-muted-foreground">{t('wizard.templatePreset')}</span>
                   <span className="text-amber-400 font-bold">{form.template_preset.toUpperCase()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">SSH Key Authorized:</span>
+                  <span className="text-muted-foreground">{t('wizard.sshAuthorized')}</span>
                   <span className={form.ssh_key ? 'text-cyan-400 font-bold' : 'text-muted-foreground'}>
-                    {form.ssh_key ? 'Injected ✓' : 'Password Login Only'}
+                    {form.ssh_key ? `${t('wizard.injected')} ✓` : t('wizard.passwordOnly')}
                   </span>
                 </div>
               </div>
@@ -786,18 +878,71 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
                   onChange={(e) => setForm({ ...form, autostart: e.target.checked })}
                   className="accent-primary size-4"
                 />
-                <label htmlFor="chk_wizard_autostart" className="text-xs text-foreground cursor-pointer font-medium">
-                  Nyalakan otomatis saat host server di-reboot (Autostart Boot)
+                <label htmlFor="chk_wizard_autostart" className="text-xs text-foreground cursor-pointer font-medium font-sans">
+                  {t('wizard.autostart')}
                 </label>
+              </div>
+
+              <div className="p-4 bg-accent/20 rounded-lg border border-border space-y-3 font-sans">
+                <p className="text-[11px] font-mono text-muted-foreground uppercase tracking-widest font-bold">{t('wizard.advanced')}</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="chk_wizard_nesting"
+                    checked={form.nesting}
+                    onChange={(e) => setForm({ ...form, nesting: e.target.checked })}
+                    className="accent-primary size-4"
+                  />
+                  <label htmlFor="chk_wizard_nesting" className="text-xs text-foreground cursor-pointer font-medium">
+                    {t('wizard.nesting')}
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="chk_wizard_privileged"
+                    checked={form.privileged}
+                    onChange={(e) => setForm({ ...form, privileged: e.target.checked })}
+                    className="accent-primary size-4"
+                  />
+                  <label htmlFor="chk_wizard_privileged" className="text-xs text-foreground cursor-pointer font-medium">
+                    {t('wizard.privileged')}
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="chk_wizard_swap"
+                    checked={form.memory_swap}
+                    onChange={(e) => setForm({ ...form, memory_swap: e.target.checked })}
+                    className="accent-primary size-4"
+                  />
+                  <label htmlFor="chk_wizard_swap" className="text-xs text-foreground cursor-pointer font-medium">
+                    {t('wizard.memorySwap')}
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="inp_wizard_cpu_allow" className="text-xs text-foreground font-medium">
+                    {t('wizard.cpuAllowance')}
+                  </label>
+                  <Input
+                    id="inp_wizard_cpu_allow"
+                    type="text"
+                    placeholder={t('wizard.cpuAllowancePlaceholder')}
+                    value={form.cpu_allowance}
+                    onChange={(e) => setForm({ ...form, cpu_allowance: e.target.value })}
+                    className="h-8 w-44 text-xs font-mono"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 flex items-center justify-between border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setStep(5)}>
-                  <ArrowLeft className="size-4" data-icon="inline-start" />
-                  <span>Kembali</span>
+                  <ArrowLeft className="size-4 mr-1.5" />
+                  <span>{t('wizard.back')}</span>
                 </Button>
                 <Button type="submit" size="lg" disabled={isDeploying} className="font-bold">
-                  {isDeploying ? 'Deploying Container...' : '🚀 Launch & Deploy LXD Container'}
+                  {isDeploying ? t('wizard.deployingBtn') : `🚀 ${t('wizard.deploy')}`}
                 </Button>
               </div>
             </form>
@@ -807,3 +952,5 @@ export function CreateLXDModal({ nodes, onClose, onRefresh, addToast }) {
     </div>
   );
 }
+
+export default CreateLXDModal;

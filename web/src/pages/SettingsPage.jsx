@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Card, Button, Badge, Select, Input } from '../components/ui/primitives';
-import { Globe, Sliders, Server, Save, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Globe, Sliders, Server, Save, AlertTriangle, CheckCircle2, Languages } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 export function SettingsPage() {
   const { addToast } = useOutletContext();
-  const [activeTab, setActiveTab] = useState('timezone');
+  const { lang, setLanguage, t } = useI18n();
+  const [activeTab, setActiveTab] = useState('system');
   const [loading, setLoading] = useState(false);
 
   const [settings, setSettings] = useState({
@@ -13,7 +15,8 @@ export function SettingsPage() {
     global_timezone: 'Asia/Jakarta',
     default_ram_gb: '2',
     default_cpu_cores: '2',
-    default_disk_gb: '20'
+    default_disk_gb: '20',
+    language: lang || 'en'
   });
 
   const fetchSettings = async () => {
@@ -24,8 +27,12 @@ export function SettingsPage() {
         setSettings(prev => ({
           ...prev,
           ...data,
-          master_public_url: data.master_public_url || window.location.origin
+          master_public_url: data.master_public_url || window.location.origin,
+          language: data.language || lang || 'en'
         }));
+        if (data.language && data.language !== lang) {
+          setLanguage(data.language);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -50,7 +57,10 @@ export function SettingsPage() {
         body: JSON.stringify(settings)
       });
       if (res.ok) {
-        addToast('success', 'Konfigurasi global kluster Space LXD berhasil disimpan!');
+        addToast('success', t('settings.saved'));
+        if (settings.language && settings.language !== lang) {
+          setLanguage(settings.language);
+        }
         fetchSettings();
       } else {
         addToast('error', await res.text());
@@ -78,10 +88,10 @@ export function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
-          <span>Global Cluster Settings</span>
-          <Badge variant="success">Engine Online</Badge>
+          <span>{t('settings.title')}</span>
+          <Badge variant="success">{t('settings.engineOnline')}</Badge>
         </h1>
-        <p className="text-xs text-muted-foreground">Pengaturan sistem global kluster Space LXD, endpoint master, timezone, dan alokasi resource bawaan</p>
+        <p className="text-xs text-muted-foreground">{t('settings.subtitle')}</p>
       </div>
 
       {/* Domain Match Warning Banner */}
@@ -89,9 +99,9 @@ export function SettingsPage() {
         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-xs flex items-start gap-3 shadow-md">
           <AlertTriangle className="size-5 shrink-0 text-amber-400 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-bold text-amber-200">⚠️ Perhatian: Terdeteksi Akses Domain Tidak Sesuai (Domain Mismatch)</p>
+            <p className="font-bold text-amber-200">⚠️ {t('settings.domainWarning')}</p>
             <p className="text-[11px] text-amber-300/80 font-sans">
-              Dashboard ini sedang diakses melalui URL <span className="font-mono font-bold underline">{currentOrigin}</span>, namun <strong>Master Public Endpoint URL</strong> diatur ke <span className="font-mono font-bold underline">{settings.master_public_url}</span>.
+              {t('settings.domainMismatch', { origin: currentOrigin, url: settings.master_public_url })}
             </p>
             <div className="pt-1 flex items-center gap-2 font-sans">
               <Button
@@ -100,7 +110,7 @@ export function SettingsPage() {
                 className="h-7 text-[11px] border-amber-500/40 hover:bg-amber-500/20 text-amber-200"
                 onClick={() => setSettings({ ...settings, master_public_url: currentOrigin })}
               >
-                Gunakan URL Saat Ini ({currentOrigin})
+                {t('settings.useCurrent', { url: currentOrigin })}
               </Button>
             </div>
           </div>
@@ -120,7 +130,7 @@ export function SettingsPage() {
             }`}
           >
             <Server className="size-4 shrink-0 text-cyan-400" />
-            <span>Master Public Endpoint</span>
+            <span>{t('settings.tabSystem')}</span>
           </button>
 
           <button
@@ -132,7 +142,7 @@ export function SettingsPage() {
             }`}
           >
             <Globe className="size-4 shrink-0 text-primary" />
-            <span>Timezone & Region</span>
+            <span>{t('settings.tabTimezone')}</span>
           </button>
 
           <button
@@ -144,7 +154,19 @@ export function SettingsPage() {
             }`}
           >
             <Sliders className="size-4 shrink-0 text-amber-400" />
-            <span>Default LXD Resources</span>
+            <span>{t('settings.tabResources')}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('language')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left transition-all ${
+              activeTab === 'language'
+                ? 'bg-secondary text-secondary-foreground font-bold border border-border shadow-xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+            }`}
+          >
+            <Languages className="size-4 shrink-0 text-emerald-400" />
+            <span>{t('settings.languageTitle')}</span>
           </button>
         </Card>
 
@@ -156,25 +178,25 @@ export function SettingsPage() {
               <div className="border-b border-border pb-4">
                 <h2 className="text-base font-bold text-foreground flex items-center gap-2">
                   <Server className="size-5 text-cyan-400" />
-                  <span>Master Public Endpoint & Domain Validation</span>
+                  <span>{t('settings.systemTitle')}</span>
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Alamat URL publik Master Control Plane yang digunakan oleh Worker Node dan skrip pendaftaran otomatis.
+                  {t('settings.systemDesc')}
                 </p>
               </div>
 
               <form onSubmit={handleSaveSettings} className="space-y-5 text-xs font-sans">
                 <div className="space-y-1.5 max-w-lg">
-                  <label className="block text-foreground font-semibold">Master Public Endpoint URL</label>
+                  <label className="block text-foreground font-semibold">{t('settings.systemUrl')}</label>
                   <Input
                     type="url"
-                    placeholder="https://lxd.yourdomain.com atau http://192.168.1.100:9090"
+                    placeholder={t('settings.systemPlaceholder')}
                     value={settings.master_public_url}
                     onChange={e => setSettings({ ...settings, master_public_url: e.target.value })}
                     required
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Format: <span className="font-mono text-primary font-bold">http://DOMAIN_ATAU_IP:PORT</span> (tanpa trailing slash)
+                    {t('settings.systemNote')}
                   </p>
                 </div>
 
@@ -184,41 +206,41 @@ export function SettingsPage() {
                     {isDomainMatching ? (
                       <>
                         <CheckCircle2 className="size-4 text-emerald-400" />
-                        <span className="font-bold text-emerald-200">Domain Verification Success</span>
+                        <span className="font-bold text-emerald-200">{t('settings.domainSuccess')}</span>
                       </>
                     ) : (
                       <>
                         <AlertTriangle className="size-4 text-amber-400" />
-                        <span className="font-bold text-amber-200">Domain Mismatch Warning</span>
+                        <span className="font-bold text-amber-200">{t('settings.domainWarning')}</span>
                       </>
                     )}
                   </div>
                   <p className="text-[11px] font-sans opacity-90">
                     {isDomainMatching
-                      ? `Dashboard saat ini diakses melalui domain sah '${currentOrigin}' yang 100% cocok dengan Master Endpoint!`
-                      : `Dashboard diakses melalui '${currentOrigin}', padahal Master Endpoint terdaftar sebagai '${settings.master_public_url}'.`}
+                      ? t('settings.domainMatch', { origin: currentOrigin })
+                      : t('settings.domainMismatch', { origin: currentOrigin, url: settings.master_public_url })}
                   </p>
                 </div>
 
                 <div className="pt-2 flex justify-end">
                   <Button type="submit" disabled={loading}>
-                    <Save className="size-4" data-icon="inline-start" />
-                    <span>Simpan Master Endpoint URL</span>
+                    <Save className="size-4 mr-1.5" />
+                    <span>{t('settings.saveEndpoint')}</span>
                   </Button>
                 </div>
               </form>
 
               {/* System Architecture Info */}
               <div className="pt-4 border-t border-border space-y-3">
-                <h3 className="text-xs font-bold text-muted-foreground uppercase font-mono tracking-wider">System Architecture Info</h3>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase font-mono tracking-wider">{t('settings.sysArch')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
                   <div className="p-3 bg-background rounded-lg border border-border space-y-1">
-                    <p className="text-[11px] text-muted-foreground uppercase">Database Storage Engine</p>
-                    <p className="text-sm font-bold text-emerald-400">SQLite 3 (PRAGMA WAL Mode Active)</p>
+                    <p className="text-[11px] text-muted-foreground uppercase">{t('settings.dbEngine')}</p>
+                    <p className="text-sm font-bold text-emerald-400">{t('settings.dbValue')}</p>
                   </div>
                   <div className="p-3 bg-background rounded-lg border border-border space-y-1">
-                    <p className="text-[11px] text-muted-foreground uppercase">Agent Tunnel Communication</p>
-                    <p className="text-sm font-bold text-cyan-400">Bidirectional WebSocket RPC</p>
+                    <p className="text-[11px] text-muted-foreground uppercase">{t('settings.agentTunnel')}</p>
+                    <p className="text-sm font-bold text-cyan-400">{t('settings.tunnelValue')}</p>
                   </div>
                 </div>
               </div>
@@ -231,16 +253,16 @@ export function SettingsPage() {
               <div className="border-b border-border pb-4">
                 <h2 className="text-base font-bold text-foreground flex items-center gap-2">
                   <Globe className="size-5 text-primary" />
-                  <span>Global Timezone Configuration</span>
+                  <span>{t('settings.timezoneTitle')}</span>
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Konfigurasi timezone global kluster. Setiap container LXD baru yang dibuat di node mana pun akan otomatis mewarisi timezone ini (`environment.TZ`).
+                  {t('settings.timezoneDesc')}
                 </p>
               </div>
 
               <form onSubmit={handleSaveSettings} className="space-y-5 text-xs font-sans">
                 <div className="space-y-1.5 max-w-md">
-                  <label className="block text-foreground font-semibold">Pilih Timezone Global Kluster</label>
+                  <label className="block text-foreground font-semibold">{t('settings.timezoneLabel')}</label>
                   <Select
                     value={settings.global_timezone}
                     onChange={e => setSettings({ ...settings, global_timezone: e.target.value })}
@@ -250,25 +272,25 @@ export function SettingsPage() {
                     ))}
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
-                    Timezone aktif saat ini: <span className="font-mono text-primary font-bold">{settings.global_timezone}</span>
+                    {t('settings.timezoneCurrent', { tz: settings.global_timezone })}
                   </p>
                 </div>
 
                 <div className="p-4 bg-background border border-border rounded-lg space-y-2 font-mono text-xs">
                   <p className="text-foreground font-bold flex items-center gap-2">
-                    <span>💡 Efek Pengaturan Timezone:</span>
+                    <span>💡 {t('settings.timezoneNote')}</span>
                   </p>
                   <ul className="list-disc list-inside text-muted-foreground space-y-1 font-sans text-[11px]">
-                    <li>Disuntikkan ke variabel lingkungan container: <span className="font-mono text-primary">environment.TZ={settings.global_timezone}</span>.</li>
-                    <li>Disuntikkan ke konfigurasi Cloud-Init: <span className="font-mono text-primary">timezone: {settings.global_timezone}</span>.</li>
-                    <li>Mengkoreksi otomatis file <span className="font-mono text-foreground">/etc/localtime</span> & <span className="font-mono text-foreground">/etc/timezone</span> di dalam container.</li>
+                    <li>{t('settings.timezoneNote1', { tz: settings.global_timezone })}</li>
+                    <li>{t('settings.timezoneNote2', { tz: settings.global_timezone })}</li>
+                    <li>{t('settings.timezoneNote3')}</li>
                   </ul>
                 </div>
 
                 <div className="pt-2 flex justify-end">
                   <Button type="submit" disabled={loading}>
-                    <Save className="size-4" data-icon="inline-start" />
-                    <span>Simpan Konfigurasi Timezone</span>
+                    <Save className="size-4 mr-1.5" />
+                    <span>{t('settings.saveTimezone')}</span>
                   </Button>
                 </div>
               </form>
@@ -281,45 +303,45 @@ export function SettingsPage() {
               <div className="border-b border-border pb-4">
                 <h2 className="text-base font-bold text-foreground flex items-center gap-2">
                   <Sliders className="size-5 text-amber-400" />
-                  <span>Default LXD Resource Allocation</span>
+                  <span>{t('settings.resourcesTitle')}</span>
                 </h2>
-                <p className="text-xs text-muted-foreground">Tentukan alokasi resource bawaan saat membuka Wizard Pembuatan Container LXD Baru</p>
+                <p className="text-xs text-muted-foreground">{t('settings.resourcesDesc')}</p>
               </div>
 
               <form onSubmit={handleSaveSettings} className="space-y-4 text-xs font-sans max-w-md">
                 <div>
-                  <label className="block text-foreground font-medium mb-1">Default RAM Memory Limit</label>
+                  <label className="block text-foreground font-medium mb-1">{t('settings.ramLabel')}</label>
                   <Select
                     value={settings.default_ram_gb}
                     onChange={e => setSettings({ ...settings, default_ram_gb: e.target.value })}
                   >
                     <option value="1">1 GB RAM</option>
-                    <option value="2">2 GB RAM (Rekomendasi Standar)</option>
+                    <option value="2">2 GB RAM</option>
                     <option value="4">4 GB RAM</option>
                     <option value="8">8 GB RAM</option>
                   </Select>
                 </div>
 
                 <div>
-                  <label className="block text-foreground font-medium mb-1">Default CPU Cores Allowance</label>
+                  <label className="block text-foreground font-medium mb-1">{t('settings.cpuLabel')}</label>
                   <Select
                     value={settings.default_cpu_cores}
                     onChange={e => setSettings({ ...settings, default_cpu_cores: e.target.value })}
                   >
                     <option value="1">1 Core CPU</option>
-                    <option value="2">2 Cores CPU (Rekomendasi Standar)</option>
+                    <option value="2">2 Cores CPU</option>
                     <option value="4">4 Cores CPU</option>
                   </Select>
                 </div>
 
                 <div>
-                  <label className="block text-foreground font-medium mb-1">Default Disk Storage Quota</label>
+                  <label className="block text-foreground font-medium mb-1">{t('settings.diskLabel')}</label>
                   <Select
                     value={settings.default_disk_gb}
                     onChange={e => setSettings({ ...settings, default_disk_gb: e.target.value })}
                   >
                     <option value="10">10 GB Storage</option>
-                    <option value="20">20 GB Storage (Rekomendasi Standar)</option>
+                    <option value="20">20 GB Storage</option>
                     <option value="50">50 GB Storage</option>
                     <option value="100">100 GB Storage</option>
                   </Select>
@@ -327,8 +349,74 @@ export function SettingsPage() {
 
                 <div className="pt-2 flex justify-end">
                   <Button type="submit" disabled={loading}>
-                    <Save className="size-4" data-icon="inline-start" />
-                    <span>Simpan Resource Defaults</span>
+                    <Save className="size-4 mr-1.5" />
+                    <span>{t('settings.saveResources')}</span>
+                  </Button>
+                </div>
+              </form>
+            </Card>
+          )}
+
+          {/* TAB 4: LANGUAGE & LOCALIZATION */}
+          {activeTab === 'language' && (
+            <Card className="p-6 space-y-5">
+              <div className="border-b border-border pb-4">
+                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Languages className="size-5 text-emerald-400" />
+                  <span>{t('settings.languageTitle')}</span>
+                </h2>
+                <p className="text-xs text-muted-foreground">{t('setup.language.desc')}</p>
+              </div>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4 text-xs font-sans max-w-md">
+                <div className="space-y-3">
+                  <div
+                    onClick={() => {
+                      setSettings({ ...settings, language: 'en' });
+                      setLanguage('en');
+                    }}
+                    className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                      (settings.language || lang) === 'en'
+                        ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary'
+                        : 'border-border bg-background hover:bg-accent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🇬🇧</span>
+                      <div>
+                        <div className="font-bold text-foreground">{t('setup.language.english')}</div>
+                        <div className="text-[11px] text-muted-foreground font-mono">English (Default)</div>
+                      </div>
+                    </div>
+                    {(settings.language || lang) === 'en' && <Badge variant="info">Active</Badge>}
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setSettings({ ...settings, language: 'id' });
+                      setLanguage('id');
+                    }}
+                    className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                      (settings.language || lang) === 'id'
+                        ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary'
+                        : 'border-border bg-background hover:bg-accent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🇮🇩</span>
+                      <div>
+                        <div className="font-bold text-foreground">{t('setup.language.indonesian')}</div>
+                        <div className="text-[11px] text-muted-foreground font-mono">Bahasa Indonesia</div>
+                      </div>
+                    </div>
+                    {(settings.language || lang) === 'id' && <Badge variant="info">Active</Badge>}
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <Button type="submit" disabled={loading}>
+                    <Save className="size-4 mr-1.5" />
+                    <span>{t('common.save')}</span>
                   </Button>
                 </div>
               </form>
@@ -339,3 +427,5 @@ export function SettingsPage() {
     </div>
   );
 }
+
+export default SettingsPage;

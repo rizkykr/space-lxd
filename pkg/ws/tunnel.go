@@ -50,6 +50,12 @@ type RPCReqPayload struct {
 	Autostart      bool   `json:"autostart,omitempty"`
 	SSHKey         string `json:"ssh_key,omitempty"`
 	TemplatePreset string `json:"template_preset,omitempty"`
+	StoragePool    string `json:"storage_pool,omitempty"`
+	Network        string `json:"network,omitempty"`
+	Privileged     bool   `json:"privileged,omitempty"`
+	Nesting        bool   `json:"nesting,omitempty"`
+	CPUAllowance   string `json:"cpu_allowance,omitempty"`
+	MemorySwap     bool   `json:"memory_swap,omitempty"`
 	SnapName       string `json:"snap_name,omitempty"`
 	SnapEnabled    bool   `json:"snap_enabled,omitempty"`
 	SnapCron       string `json:"snap_cron,omitempty"`
@@ -178,7 +184,7 @@ func (h *Hub) SendRPC(nodeID string, action string, payload RPCReqPayload, timeo
 	select {
 	case resp := <-ch:
 		if resp.Error != "" {
-			return nil, fmt.Errorf(resp.Error)
+			return nil, fmt.Errorf("%s", resp.Error)
 		}
 		return &resp, nil
 	case <-time.After(timeout):

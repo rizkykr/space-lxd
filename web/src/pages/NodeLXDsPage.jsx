@@ -5,11 +5,14 @@ import { TerminalModal } from '../components/modals/TerminalModal';
 import { NodeHostTerminal } from '../components/terminal/NodeHostTerminal';
 import { ConfirmDialog } from '../components/modals/ConfirmDialog';
 import { Plus, ChevronRight, Layers, Sliders, Terminal, Square, Play, Trash2, Loader2, Server, Edit2, Check, X } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 export function NodeLXDsPage() {
   const { nodeId } = useParams();
   const navigate = useNavigate();
   const { nodes, fetchNodes, addToast, onOpenCreateLXD } = useOutletContext();
+  const { t } = useI18n();
+
   const [activeTab, setActiveTab] = useState('containers');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTerminalTarget, setActiveTerminalTarget] = useState(null);
@@ -27,7 +30,7 @@ export function NodeLXDsPage() {
   const handleRenameNode = async () => {
     const trimmed = nodeNewName.trim();
     if (!trimmed) {
-      addToast('error', 'Nama node tidak boleh kosong');
+      addToast('error', t('nodes.nameRequired'));
       return;
     }
     setRenamingLoading(true);
@@ -38,7 +41,7 @@ export function NodeLXDsPage() {
         body: JSON.stringify({ action: 'rename_node', new_name: trimmed })
       });
       if (res.ok) {
-        addToast('success', `Nama node berhasil diperbarui menjadi '${trimmed}'`);
+        addToast('success', t('nodes.renameSuccess', { name: trimmed }));
         setIsEditingName(false);
         fetchNodes();
       } else {
@@ -65,7 +68,7 @@ export function NodeLXDsPage() {
         body: JSON.stringify({ action, name: lxdName })
       });
       if (res.ok) {
-        addToast('success', `LXD '${lxdName}' berhasil di-${action}`);
+        addToast('success', t('node.actionDone', { name: lxdName, action }));
         fetchNodes();
       } else {
         addToast('error', await res.text());
@@ -81,8 +84,8 @@ export function NodeLXDsPage() {
   const promptDeleteLXD = (lxdName) => {
     setConfirmModal({
       isOpen: true,
-      title: `Hapus LXD Container '${lxdName}'`,
-      message: `Apakah Anda yakin ingin menghapus LXD Container '${lxdName}' di Node ${targetNode?.name || nodeId}? Semua data dan memori di dalam container ini akan dihapus secara permanen.`,
+      title: `${t('node.deleteLxdTitle')} '${lxdName}'`,
+      message: t('node.deleteLxdMsg', { name: lxdName }),
       requireMatchText: lxdName,
       onConfirm: () => handleLXDAction('delete', lxdName)
     });
@@ -97,7 +100,7 @@ export function NodeLXDsPage() {
         body: JSON.stringify({ action: 'delete_node' })
       });
       if (res.ok) {
-        addToast('success', `Node Server '${targetNode?.name || nodeId}' dan seluruh LXD container di dalamnya berhasil dihapus`);
+        addToast('success', t('node.deleteNodeSuccess', { name: targetNode?.name || nodeId }));
         fetchNodes();
         navigate('/nodes');
       } else {
@@ -115,8 +118,8 @@ export function NodeLXDsPage() {
     const nameMatch = targetNode?.name || nodeId;
     setConfirmModal({
       isOpen: true,
-      title: `⚠️ Hapus Node Server '${nameMatch}'`,
-      message: `PERINGATAN: Apakah Anda yakin ingin menghapus Node Server '${nameMatch}' dari kluster? SELURUH container LXD (${nodeLXDs.length} container) yang ada di dalam Node ini akan dihapus secara permanen!`,
+      title: `⚠️ ${t('node.deleteNodeTitle')} '${nameMatch}'`,
+      message: t('node.deleteNodeMsg', { name: nameMatch }),
       requireMatchText: nameMatch,
       onConfirm: handleDeleteNode
     });
@@ -136,7 +139,7 @@ export function NodeLXDsPage() {
         body: JSON.stringify({ action: 'update_node_domain', custom_ip_domain: customDomainInput.trim() })
       });
       if (res.ok) {
-        addToast('success', `Domain/IP Custom node berhasil diperbarui`);
+        addToast('success', t('node.customDomainUpdated'));
         setIsEditingDomain(false);
         fetchNodes();
       } else {
@@ -155,7 +158,9 @@ export function NodeLXDsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground mb-1">
-            <span className="cursor-pointer hover:underline text-primary" onClick={() => navigate('/nodes')}>Node Servers</span>
+            <span className="cursor-pointer hover:underline text-primary" onClick={() => navigate('/nodes')}>
+              {t('nodes.title')}
+            </span>
             <ChevronRight className="size-3" />
             <span className="text-foreground font-bold">{targetNode?.name || nodeId}</span>
           </div>
@@ -166,7 +171,7 @@ export function NodeLXDsPage() {
                   type="text"
                   value={nodeNewName}
                   onChange={(e) => setNodeNewName(e.target.value)}
-                  placeholder="Nama Node Baru..."
+                  placeholder={t('node.renamePlaceholder')}
                   className="h-8 text-sm font-bold w-56"
                   autoFocus
                 />
@@ -179,31 +184,31 @@ export function NodeLXDsPage() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span>Node: {targetNode?.name || nodeId}</span>
-                <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-primary" title="Ubah Nama Display Node" onClick={() => { setNodeNewName(targetNode?.name || ''); setIsEditingName(true); }}>
+                <span>{t('node.title', { name: targetNode?.name || nodeId })}</span>
+                <Button variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-primary" title={t('nodes.renameNode')} onClick={() => { setNodeNewName(targetNode?.name || ''); setIsEditingName(true); }}>
                   <Edit2 className="size-3.5" />
                 </Button>
               </div>
             )}
-            {targetNode?.is_master ? <Badge variant="info">MASTER NODE</Badge> : <Badge variant="secondary">WORKER NODE</Badge>}
+            {targetNode?.is_master ? <Badge variant="info">{t('node.masterNode')}</Badge> : <Badge variant="secondary">{t('node.workerNode')}</Badge>}
             <Badge variant={targetNode?.status === 'online' ? 'success' : 'secondary'}>
-              {targetNode?.status?.toUpperCase() || 'ONLINE'}
+              {targetNode?.status?.toUpperCase() || t('common.online')}
             </Badge>
           </h1>
         </div>
 
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setActiveTab('terminal')}>
-            <Server className="size-4" data-icon="inline-start" />
-            <span>Host Terminal</span>
+            <Server className="size-4 mr-1.5" />
+            <span>{t('node.hostTerminal')}</span>
           </Button>
-          <Button variant="destructive" onClick={promptDeleteNode} title="Hapus Node Server ini beserta seluruh LXD Container didalamnya">
-            <Trash2 className="size-4" data-icon="inline-start" />
-            <span>Hapus Node</span>
+          <Button variant="destructive" onClick={promptDeleteNode} title={t('node.deleteNode')}>
+            <Trash2 className="size-4 mr-1.5" />
+            <span>{t('node.deleteNode')}</span>
           </Button>
           <Button onClick={onOpenCreateLXD}>
-            <Plus className="size-4" data-icon="inline-start" />
-            <span>Create LXD Container</span>
+            <Plus className="size-4 mr-1.5" />
+            <span>{t('node.createLxd')}</span>
           </Button>
         </div>
       </div>
@@ -211,14 +216,14 @@ export function NodeLXDsPage() {
       {/* Node Health Quick Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 font-mono text-xs">
         <Card className="p-4 space-y-1">
-          <p className="text-[11px] text-muted-foreground uppercase">Internal Host IP</p>
+          <p className="text-[11px] text-muted-foreground uppercase">{t('node.internalIp')}</p>
           <p className="text-base font-bold text-foreground">{targetNode?.ip || '127.0.0.1'}</p>
         </Card>
         <Card className="p-4 space-y-1">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] text-muted-foreground uppercase">Custom Domain / IP Endpoint</p>
+            <p className="text-[11px] text-muted-foreground uppercase">{t('node.customEndpoint')}</p>
             {!isEditingDomain && (
-              <Button variant="ghost" size="icon" className="size-5 text-muted-foreground hover:text-primary" title="Atur Domain/IP Kustom" onClick={() => { setCustomDomainInput(targetNode?.custom_ip_domain || ''); setIsEditingDomain(true); }}>
+              <Button variant="ghost" size="icon" className="size-5 text-muted-foreground hover:text-primary" title={t('node.customEndpoint')} onClick={() => { setCustomDomainInput(targetNode?.custom_ip_domain || ''); setIsEditingDomain(true); }}>
                 <Edit2 className="size-3" />
               </Button>
             )}
@@ -229,7 +234,7 @@ export function NodeLXDsPage() {
                 type="text"
                 value={customDomainInput}
                 onChange={(e) => setCustomDomainInput(e.target.value)}
-                placeholder="node1.domain.com atau IP..."
+                placeholder={t('node.domainPlaceholder')}
                 className="h-7 text-xs font-mono"
                 autoFocus
               />
@@ -241,20 +246,20 @@ export function NodeLXDsPage() {
               </Button>
             </div>
           ) : (
-            <p className="text-base font-bold text-emerald-400 truncate" title={targetNode?.custom_ip_domain || 'Belum diatur'}>
-              {targetNode?.custom_ip_domain || '— (Gunakan Internal)'}
+            <p className="text-base font-bold text-emerald-400 truncate" title={targetNode?.custom_ip_domain || '—'}>
+              {targetNode?.custom_ip_domain || t('node.notSet')}
             </p>
           )}
         </Card>
         <Card className="p-4 space-y-1">
-          <p className="text-[11px] text-muted-foreground uppercase">RAM Usage</p>
+          <p className="text-[11px] text-muted-foreground uppercase">{t('node.ramUsage')}</p>
           <p className="text-base font-bold text-purple-400">
-            {targetNode ? `${(targetNode.ram_used_mb / 1024).toFixed(1)} / ${(targetNode.ram_total_mb / 1024).toFixed(1)} GB` : '—'}
+            {targetNode ? t('node.gb', { used: (targetNode.ram_used_mb / 1024).toFixed(1), total: (targetNode.ram_total_mb / 1024).toFixed(1) }) : '—'}
           </p>
         </Card>
         <Card className="p-4 space-y-1">
-          <p className="text-[11px] text-muted-foreground uppercase">Active LXD Containers</p>
-          <p className="text-base font-bold text-primary">{nodeLXDs.length} LXDs</p>
+          <p className="text-[11px] text-muted-foreground uppercase">{t('node.activeLxds')}</p>
+          <p className="text-base font-bold text-primary">{t('dash.lxds', { n: nodeLXDs.length })}</p>
         </Card>
       </div>
 
@@ -265,14 +270,14 @@ export function NodeLXDsPage() {
           className={`flex-1 py-2.5 rounded-md transition font-medium text-center flex items-center justify-center gap-1.5 ${activeTab === 'containers' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
           <Layers className="size-3.5" />
-          LXD Containers ({nodeLXDs.length})
+          <span>{t('node.lxdContainers', { n: nodeLXDs.length })}</span>
         </button>
         <button
           onClick={() => setActiveTab('terminal')}
           className={`flex-1 py-2.5 rounded-md transition font-medium text-center flex items-center justify-center gap-1.5 ${activeTab === 'terminal' ? 'bg-secondary text-secondary-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'}`}
         >
           <Server className="size-3.5" />
-          🖥 Host Terminal
+          <span>🖥 {t('node.hostTerminal')}</span>
         </button>
       </Card>
 
@@ -282,11 +287,11 @@ export function NodeLXDsPage() {
         <Card className="p-3.5 flex items-center justify-between gap-3">
           <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
             <Layers className="size-4 text-primary" />
-            <span>LXD Containers List ({filteredLXDs.length})</span>
+            <span>{t('node.lxdContainers', { n: filteredLXDs.length })}</span>
           </h2>
           <Input
             type="text"
-            placeholder="Cari container name, IP..."
+            placeholder={t('node.search')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full sm:w-64"
@@ -298,10 +303,10 @@ export function NodeLXDsPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border text-[11px] font-mono text-muted-foreground uppercase tracking-wider bg-background">
-                  <th className="py-3.5 px-4">Container Name</th>
+                  <th className="py-3.5 px-4">{t('node.containerName')}</th>
                   <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-4">IPv4 Address</th>
-                  <th className="py-3.5 px-4">RAM Allocation</th>
+                  <th className="py-3.5 px-4">{t('node.ipv4')}</th>
+                  <th className="py-3.5 px-4">{t('node.ramAllocation')}</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -309,7 +314,7 @@ export function NodeLXDsPage() {
                 {filteredLXDs.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="text-center py-12 text-muted-foreground font-mono">
-                      Belum ada container LXD di Node ini. Klik 'Create LXD Container' untuk menambahkan.
+                      {t('node.noContainers')}
                     </td>
                   </tr>
                 ) : (
@@ -324,30 +329,32 @@ export function NodeLXDsPage() {
                           <span className="hover:underline text-primary">{item.name}</span>
                         </td>
                         <td className="py-3.5 px-4 font-mono">
-                          <span className={isRunning ? 'text-emerald-400 font-bold' : 'text-muted-foreground'}>{item.status}</span>
+                          <span className={isRunning ? 'text-emerald-400 font-bold' : 'text-muted-foreground'}>
+                            {isRunning ? t('common.running') : item.status}
+                          </span>
                         </td>
                         <td className="py-3.5 px-4 font-mono text-foreground">{item.ipv4 || '—'}</td>
                         <td className="py-3.5 px-4 font-mono text-foreground">{item.ram_used_mb ? `${item.ram_used_mb} MB` : '—'}</td>
                         <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button variant="ghost" size="icon" onClick={() => navigate(`/lxds/${nodeId}/${item.name}`)} title="Inspect Full LXD Detail Page">
+                            <Button variant="ghost" size="icon" onClick={() => navigate(`/lxds/${nodeId}/${item.name}`)} title={t('node.inspectDetail')}>
                               <Sliders className="size-3.5 text-muted-foreground" />
                             </Button>
                             {isRunning ? (
                               <>
-                                <Button variant="ghost" size="icon" onClick={() => setActiveTerminalTarget(item)} title="Terminal Shell">
+                                <Button variant="ghost" size="icon" onClick={() => setActiveTerminalTarget(item)} title={t('node.terminalShell')}>
                                   <Terminal className="size-3.5 text-primary" />
                                 </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleLXDAction('stop', item.name)} disabled={isItemLoading} title="Stop LXD">
+                                <Button variant="ghost" size="icon" onClick={() => handleLXDAction('stop', item.name)} disabled={isItemLoading} title="Stop">
                                   {loadingAction === `stop_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5 text-amber-400" />}
                                 </Button>
                               </>
                             ) : (
-                              <Button variant="ghost" size="icon" onClick={() => handleLXDAction('start', item.name)} disabled={isItemLoading} title="Start LXD">
+                              <Button variant="ghost" size="icon" onClick={() => handleLXDAction('start', item.name)} disabled={isItemLoading} title="Start">
                                 {loadingAction === `start_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 text-emerald-400" />}
                               </Button>
                             )}
-                            <Button variant="ghost" size="icon" onClick={() => promptDeleteLXD(item.name)} disabled={isItemLoading} title="Delete LXD">
+                            <Button variant="ghost" size="icon" onClick={() => promptDeleteLXD(item.name)} disabled={isItemLoading} title={t('common.delete')}>
                               {loadingAction === `delete_${item.name}` ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5 text-destructive" />}
                             </Button>
                           </div>
@@ -362,7 +369,7 @@ export function NodeLXDsPage() {
         </Card>
       </div>
 
-      {/* Tab: Host Terminal (persisted in DOM) */}
+      {/* Tab: Host Terminal */}
       <div className={activeTab === 'terminal' ? 'block' : 'hidden'}>
         <Card className="h-[580px] overflow-hidden flex flex-col border-border">
           <div className="bg-background px-4 py-3 border-b border-border flex items-center justify-between">
@@ -381,7 +388,7 @@ export function NodeLXDsPage() {
               </span>
               {targetNode?.is_master && (
                 <span className="text-[10px] font-mono text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded">
-                  MASTER
+                  {t('common.master')}
                 </span>
               )}
             </div>
@@ -410,3 +417,5 @@ export function NodeLXDsPage() {
     </div>
   );
 }
+
+export default NodeLXDsPage;

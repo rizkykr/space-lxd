@@ -1,23 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
+import { useI18n } from './i18n';
 
-// Layout & Pages
+// Layout (static, needed for routing shell)
 import { ProtectedLayout } from './components/layout/ProtectedLayout';
-import { DashboardPage } from './pages/DashboardPage';
-import { MonitoringPage } from './pages/MonitoringPage';
-import { NodesPage } from './pages/NodesPage';
-import { NodeLXDsPage } from './pages/NodeLXDsPage';
-import { LXDDetailPage } from './pages/LXDDetailPage';
-import { SSHKeysAndTemplatesPage } from './pages/SSHKeysAndTemplatesPage';
-import { AuditLogsPage } from './pages/AuditLogsPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { SettingsPage } from './pages/SettingsPage';
-import { LoginPage } from './pages/LoginPage';
-import { SetupPage } from './pages/SetupPage';
+
+// Lazy-loaded pages (code-split for faster initial load)
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const MonitoringPage = lazy(() => import('./pages/MonitoringPage'));
+const NodesPage = lazy(() => import('./pages/NodesPage'));
+const NodeLXDsPage = lazy(() => import('./pages/NodeLXDsPage'));
+const LXDDetailPage = lazy(() => import('./pages/LXDDetailPage'));
+const SSHKeysAndTemplatesPage = lazy(() => import('./pages/SSHKeysAndTemplatesPage'));
+const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SetupPage = lazy(() => import('./pages/SetupPage'));
+
+function PageLoader() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center text-muted-foreground font-mono text-xs">
+      <div className="flex items-center gap-3">
+        <RefreshCw className="size-5 animate-spin text-primary" />
+        <span>Loading...</span>
+      </div>
+    </div>
+  );
+}
 
 // ── APP ROOT ROUTER ────────────────────────────────────────────────────────────
 export default function App() {
+  const { setLanguage } = useI18n();
   const [setupRequired, setSetupRequired] = useState(false);
   const [token, setToken] = useState(localStorage.getItem('lxd_token') || '');
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('lxd_user') || 'null'));
@@ -28,10 +43,13 @@ export default function App() {
       .then(res => res.json())
       .then(data => {
         if (!data.setup_completed) setSetupRequired(true);
+        if (data.language && !localStorage.getItem('lxd_lang')) {
+          setLanguage(data.language);
+        }
       })
       .catch(console.error)
       .finally(() => setAuthLoading(false));
-  }, []);
+  }, [setLanguage]);
 
   const handleLoginSuccess = (newToken, newUser) => {
     setSetupRequired(false);
@@ -60,36 +78,38 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/setup" element={setupRequired ? <SetupPage onSetupComplete={handleLoginSuccess} /> : <Navigate to="/" replace />} />
-      <Route path="/login" element={!token ? <LoginPage onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" replace />} />
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/setup" element={setupRequired ? <SetupPage onSetupComplete={handleLoginSuccess} /> : <Navigate to="/" replace />} />
+        <Route path="/login" element={!token ? <LoginPage onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/" replace />} />
 
-      {/* Protected Dashboard Layout */}
-      <Route
-        path="/"
-        element={
-          setupRequired ? (
-            <Navigate to="/setup" replace />
-          ) : !token ? (
-            <Navigate to="/login" replace />
-          ) : (
-            <ProtectedLayout user={user} onLogout={handleLogout} />
-          )
-        }
-      >
-        <Route index element={<DashboardPage />} />
-        <Route path="monitoring" element={<MonitoringPage />} />
-        <Route path="nodes" element={<NodesPage />} />
-        <Route path="nodes/:nodeId" element={<NodeLXDsPage />} />
-        <Route path="lxds" element={<Navigate to="/nodes" replace />} />
-        <Route path="lxds/:nodeId/:lxdName" element={<LXDDetailPage />} />
-        <Route path="templates" element={<SSHKeysAndTemplatesPage />} />
-        <Route path="logs" element={<AuditLogsPage />} />
-        <Route path="profile" element={<ProfilePage user={user} />} />
-        <Route path="settings" element={<SettingsPage />} />
-      </Route>
+        {/* Protected Dashboard Layout */}
+        <Route
+          path="/"
+          element={
+            setupRequired ? (
+              <Navigate to="/setup" replace />
+            ) : !token ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <ProtectedLayout user={user} onLogout={handleLogout} />
+            )
+          }
+        >
+          <Route index element={<DashboardPage />} />
+          <Route path="monitoring" element={<MonitoringPage />} />
+          <Route path="nodes" element={<NodesPage />} />
+          <Route path="nodes/:nodeId" element={<NodeLXDsPage />} />
+          <Route path="lxds" element={<Navigate to="/nodes" replace />} />
+          <Route path="lxds/:nodeId/:lxdName" element={<LXDDetailPage />} />
+          <Route path="templates" element={<SSHKeysAndTemplatesPage />} />
+          <Route path="logs" element={<AuditLogsPage />} />
+          <Route path="profile" element={<ProfilePage user={user} />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }

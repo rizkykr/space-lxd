@@ -2,6 +2,7 @@ import React, { useEffect, useRef, memo } from 'react';
 import { Terminal as XTerminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
+import { wsUrl } from '../../utils/api';
 
 /**
  * NodeHostTerminal — Terminal PTY langsung ke host/node server.
@@ -59,9 +60,7 @@ export const NodeHostTerminal = memo(function NodeHostTerminal({ nodeId, nodeNam
     window.addEventListener('resize', handleResize);
 
     function connectWS() {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${wsProtocol}//${window.location.host}/ws/node-terminal?nodeId=${encodeURIComponent(nodeId)}`;
-      const socket = new WebSocket(wsUrl);
+      const socket = new WebSocket(wsUrl(`/ws/node-terminal?nodeId=${encodeURIComponent(nodeId)}`));
       socketRef.current = socket;
 
       socket.onopen = () => {

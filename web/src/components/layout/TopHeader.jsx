@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Badge } from '../ui/primitives';
-import { Plus, Server, LogOut, RefreshCw, ArrowUpCircle, CheckCircle2, Loader2, X } from 'lucide-react';
+import { Plus, Server, LogOut, RefreshCw, ArrowUpCircle, CheckCircle2, Loader2, X, Globe } from 'lucide-react';
+import { useI18n } from '../../i18n';
 
 export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD, onLogout, onRefresh }) {
+  const { lang, setLanguage, t } = useI18n();
   const [versionInfo, setVersionInfo] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -29,13 +31,13 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
 
   const handleStartUpdate = async () => {
     setUpdating(true);
-    setUpdateLogs(['🚀 Commencing Space LXD Auto-Update from GitHub...']);
+    setUpdateLogs([t('header.commence')]);
     setUpdateSuccess(false);
 
     try {
       const res = await fetch('/api/system/update', { method: 'POST' });
       if (!res.body) {
-        setUpdateLogs((prev) => [...prev, '❌ Failed to receive stream from server.']);
+        setUpdateLogs((prev) => [...prev, `❌ ${t('header.failedStream')}`]);
         setUpdating(false);
         return;
       }
@@ -65,7 +67,7 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
         window.location.reload();
       }, 3000);
     } catch (e) {
-      setUpdateLogs((prev) => [...prev, `❌ Connection error: ${e.message}`]);
+      setUpdateLogs((prev) => [...prev, `❌ Error: ${e.message}`]);
     } finally {
       setUpdating(false);
     }
@@ -77,8 +79,10 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
             <span className="size-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="font-semibold text-foreground">Space LXD Master</span>
-            <Badge variant="outline" className="ml-1">{nodesCount} Nodes</Badge>
+            <span className="font-semibold text-foreground">{t('header.master')}</span>
+            <Badge variant="outline" className="ml-1">
+              {t('header.nodes', { n: nodesCount })}
+            </Badge>
           </div>
 
           {versionInfo?.has_update && (
@@ -87,31 +91,58 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-full hover:bg-amber-500/20 transition-all animate-pulse"
             >
               <ArrowUpCircle className="size-3.5" />
-              <span>Update Available ({versionInfo.latest_commit})</span>
+              <span>{t('header.updateAvailable', { v: versionInfo.latest_commit })}</span>
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={onRefresh} title="Refresh Cluster State">
+        <div className="flex items-center gap-2.5">
+          {/* Language Switcher */}
+          <div className="flex items-center gap-1 bg-secondary/60 p-1 rounded-lg border border-border">
+            <Globe className="size-3 text-muted-foreground ml-1" />
+            <button
+              type="button"
+              onClick={() => setLanguage('en')}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                lang === 'en'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => setLanguage('id')}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+                lang === 'id'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              ID
+            </button>
+          </div>
+
+          <Button variant="outline" size="sm" onClick={onRefresh} title={t('header.refresh')}>
             <RefreshCw className="size-3.5 text-muted-foreground" />
           </Button>
 
           <Button variant="outline" size="sm" onClick={onOpenAddNode}>
             <Server className="size-3.5 text-cyan-400" />
-            <span>Add Node</span>
+            <span>{t('header.addNode')}</span>
           </Button>
 
           <Button variant="default" size="sm" onClick={onOpenCreateLXD}>
             <Plus className="size-3.5" />
-            <span>Create LXD</span>
+            <span>{t('header.createLxd')}</span>
           </Button>
 
           <div className="h-4 w-px bg-border mx-1"></div>
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono text-foreground font-bold">{user?.username || 'admin'}</span>
-            <Button variant="ghost" size="icon" onClick={onLogout} title="Logout Account">
+            <Button variant="ghost" size="icon" onClick={onLogout} title={t('header.logout')}>
               <LogOut className="size-4 text-destructive" />
             </Button>
           </div>
@@ -135,16 +166,16 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
                 <ArrowUpCircle className="size-5" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg text-foreground">Space LXD System Auto-Update</h3>
+                <h3 className="font-semibold text-lg text-foreground">{t('header.autoUpdate')}</h3>
                 <p className="text-xs text-muted-foreground font-mono">
-                  GitHub 'rizkykr/space-lxd' latest commit: {versionInfo?.latest_commit || 'main'}
+                  {t('header.latestCommit', { v: versionInfo?.latest_commit || 'main' })}
                 </p>
               </div>
             </div>
 
             {versionInfo?.commit_message && (
               <div className="p-3 bg-muted/40 rounded-lg border border-border/50 text-xs font-mono text-muted-foreground">
-                <span className="text-foreground font-semibold">Latest Release Note: </span>
+                <span className="text-foreground font-semibold">{t('header.releaseNote')}: </span>
                 {versionInfo.commit_message}
               </div>
             )}
@@ -166,7 +197,7 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
                 onClick={() => setShowUpdateModal(false)}
                 disabled={updating}
               >
-                Close
+                {t('header.close')}
               </Button>
 
               <Button
@@ -179,17 +210,17 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
                 {updating ? (
                   <>
                     <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                    <span>Updating System...</span>
+                    <span>{t('header.updating')}</span>
                   </>
                 ) : updateSuccess ? (
                   <>
                     <CheckCircle2 className="size-3.5 mr-1.5 text-emerald-950" />
-                    <span>Reloading...</span>
+                    <span>{t('header.reloading')}</span>
                   </>
                 ) : (
                   <>
                     <ArrowUpCircle className="size-3.5 mr-1.5" />
-                    <span>Update Now</span>
+                    <span>{t('header.updateNow')}</span>
                   </>
                 )}
               </Button>
@@ -200,3 +231,5 @@ export function TopHeader({ user, nodesCount = 0, onOpenAddNode, onOpenCreateLXD
     </>
   );
 }
+
+export default TopHeader;

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# LXD Manager Agent Installer & Multi-Node Join Script
+# Space LXD Agent Installer & Multi-Node Join Script
+# Hybrid connectivity: works over public IP, LAN, Tailscale, or a domain.
 # Usage:
 #   curl -sSL http://master-url/join.sh | sudo bash -s -- --master http://master-url --token YOUR_TOKEN --name "Worker-01"
 
@@ -11,15 +12,17 @@ RED=$'\033[38;5;196m'; DIM=$'\033[38;5;240m'
 
 MASTER_URL=""
 TOKEN=""
+ENDPOINTS=""
 NODE_NAME="$(hostname)"
 SPACE_USER="space-lxd"
 SPACE_HOME="/home/space-lxd"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --master) MASTER_URL="$2"; shift 2 ;;
-    --token)  TOKEN="$2"; shift 2 ;;
-    --name)   NODE_NAME="$2"; shift 2 ;;
+    --master)    MASTER_URL="$2"; shift 2 ;;
+    --token)     TOKEN="$2"; shift 2 ;;
+    --name)      NODE_NAME="$2"; shift 2 ;;
+    --endpoints) ENDPOINTS="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -29,37 +32,73 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-if [[ -z "$MASTER_URL" || -z "$TOKEN" ]]; then
-  echo "${RED}Error: Parameter --master dan --token wajib diisi.${R}"
+if [[ -z "$TOKEN" ]]; then
+  echo "${RED}Error: Parameter --token wajib diisi.${R}"
   echo "Penggunaan: curl -sSL http://master:9090/join.sh | sudo bash -s -- --master http://master:9090 --token <TOKEN>"
   exit 1
 fi
 
-echo "${CYN}${BD}🪐 SPACE LXD AGENT INSTALLER${R}"
+if [[ -z "$MASTER_URL" && -z "$ENDPOINTS" ]]; then
+  echo "${RED}Error: Sertakan --master <url> atau --endpoints '<url1,url2,...>' untuk mencapaikan Master.${R}"
+  exit 1
+fi
+
+echo "${CYN}${BD}🪐 SPACE LXD AGENT INSTALLER (Hybrid Mesh Ready)${R}"
 echo "--------------------------------------------------------"
-echo "  Master URL : ${MASTER_URL}"
+echo "  Master URL : ${MASTER_URL:-<auto-probe endpoints>}"
 echo "  Node Name  : ${NODE_NAME}"
 echo "--------------------------------------------------------"
 
 # ── Step 0: Deteksi & Self-Healing Inisialisasi LXD Daemon ──────────────────────
 echo "${DIM}[1/6] Memeriksa keberadaan daemon LXD...${R}"
 if ! command -v lxc &>/dev/null; then
-  echo "${YLW}⚠ LXD belum terpasang di node ini. Menginstall LXD via snap...${R}"
-  if command -v snap &>/dev/null; then
-    snap install lxd || true
-    lxd init --auto || true
-  elif command -v apt-get &>/dev/null; then
-    apt-get update && apt-get install -y snapd
-    snap install lxd || true
-    lxd init --auto || true
-  else
+  echo "${YLW}⚠ LXD belum terpasang di node ini. Menginstall LXD via package manager native...${R}"
+  INSTALLED=0
+  if command -v apt-get &>/dev/null; then
+    apt-get update && apt-get install -y lxd lvm2 && INSTALLED=1
+  elif command -v dnf &>/dev/null; then
+    dnf install -y lxd lvm2 && INSTALLED=1
+  elif command -v yum &>/dev/null; then
+    yum install -y lxd lvm2 && INSTALLED=1
+  elif command -v pacman &>/dev/null; then
+    pacman -Sy --noconfirm lxd lvm2 && INSTALLED=1
+  elif command -v apk &>/dev/null; then
+    apk add --no-cache lxd lvm2 && INSTALLED=1
+  elif command -v zypper &>/dev/null; then
+    zypper --non-interactive install lxd lvm2 && INSTALLED=1
+  elif command -v snap &>/dev/null; then
+    snap install lxd && INSTALLED=1
+  fi
+
+  if [ "$INSTALLED" -ne 1 ]; then
     echo "${RED}✗ Gagal menginstall LXD secara otomatis. Pasang LXD terlebih dahulu.${R}"
     exit 1
   fi
+  lxd init --auto || true
 else
   LXC_VER=$(lxc --version 2>/dev/null || echo "ok")
   echo "${GRN}✓ LXD Daemon terdeteksi (${LXC_VER}).${R}"
 fi
+
+# ── Best-Performance Storage Pool (ZFS > LVM-thin > dir) ─────────────────────────
+if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
+  if command -v zfs &>/dev/null; then
+    echo "${CYN}⚙ Configuring ZFS storage pool (best performance)...${R}"
+    lxd init --auto --storage-backend=zfs --storage-create-loop=10GB --storage-pool=default 2>/dev/null || true
+  fi
+  if ! lxc storage list --format=csv 2>/dev/null | grep -q . && command -v lvcreate &>/dev/null; then
+    echo "${CYN}⚙ Configuring LVM-thin storage pool (copy-on-write)...${R}"
+    lxd init --auto --storage-backend=lvm --storage-create-loop=10GB --storage-pool=default 2>/dev/null || true
+  fi
+  if ! lxc storage list --format=csv 2>/dev/null | grep -q .; then
+    echo "${YLW}⚠ ZFS/LVM unavailable, using dir storage fallback.${R}"
+    lxd init --auto 2>/dev/null || true
+  fi
+fi
+
+# ── Best-Performance Tuning: ZFS compression & no swap thrashing ──────────────
+lxc storage set default zfs.compression=on 2>/dev/null || true
+lxc profile set default limits.memory.swap=false 2>/dev/null || true
 
 # ── Ensure LXD Virtual Bridge & IP Forwarding (Best Practice Enterprise Isolation) ──
 if ! lxc network show lxdbr0 &>/dev/null; then
@@ -143,20 +182,100 @@ echo "  ${DIM}$(cat "${SSH_KEY}.pub" 2>/dev/null || echo 'N/A')${R}"
 
 NODE_ID="node_$(cat /etc/machine-id 2>/dev/null || date +%s | cut -c1-10)"
 
-# ── Step 1: Verification & Token Exchange ──────────────────────────────────────
+# ── Step 0c: Tailscale Mesh (NAT traversal — works without a public IP) ─────────
+echo "${DIM}🌐 Memeriksa Tailscale mesh (opsional)...${R}"
+if ! command -v tailscale >/dev/null 2>&1; then
+  echo "${YLW}⚠ Tailscale belum terpasang. Menginstall otomatis...${R}"
+  if command -v apt-get >/dev/null 2>&1; then
+    CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+    curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/${CODENAME}.noarmor.gpg" 2>/dev/null | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null 2>&1 || true
+    curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/${CODENAME}.tailscale-list" 2>/dev/null | tee /etc/apt/sources.list.d/tailscale.list >/dev/null 2>&1 || true
+    apt-get update >/dev/null 2>&1 || true
+    apt-get install -y tailscale >/dev/null 2>&1 || true
+  elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
+    dnf config-manager --add-repo https://pkgs.tailscale.com/stable/rhel/9/tailscale.repo >/dev/null 2>&1 || true
+    dnf install -y tailscale >/dev/null 2>&1 || true
+  elif command -v pacman >/dev/null 2>&1; then
+    pacman -Sy --noconfirm tailscale >/dev/null 2>&1 || true
+  elif command -v zypper >/dev/null 2>&1; then
+    zypper --non-interactive install tailscale >/dev/null 2>&1 || true
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache tailscale >/dev/null 2>&1 || true
+  fi
+fi
+
+TAILSCALE_IP=""
+TAILSCALE_HOST=""
+if command -v tailscale >/dev/null 2>&1; then
+  systemctl enable --now tailscaled >/dev/null 2>&1 || true
+  if ! tailscale ip -4 >/dev/null 2>&1; then
+    echo "${YLW}⏳ Tailscale perlu login sekali (one-time):${R}"
+    echo "  ${CYN}  sudo tailscale up${R}"
+    echo "  Setelah login, jalankan ulang perintah join ini agar node masuk tailnet."
+  else
+    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null | head -n1)
+    TS_DNS=$(tailscale status --json 2>/dev/null | grep -o '"DNSName":"[^"]*' | head -n1 | cut -d'"' -f4 | sed 's/\.$//')
+    [ -n "$TS_DNS" ] && TAILSCALE_HOST="$TS_DNS"
+    echo "${GRN}✓ Tailscale aktif: ${TAILSCALE_HOST:-$TAILSCALE_IP}${R}"
+  fi
+fi
+
+# Auto-fill custom_ip_domain so the master can reach this node over the mesh (SSH fallback)
+CUSTOM_IP_DOMAIN="${TAILSCALE_HOST:-$TAILSCALE_IP}"
+
+# ── Step 1: Verification & Token Exchange (auto-probe reachable master) ────────
 echo "${DIM}[3/6] Verifikasi registrasi token dengan Master...${R}"
+
+# Candidate master URLs: --master first, then --endpoints, then this node's Tailscale endpoints
+CANDIDATES=()
+[ -n "$MASTER_URL" ] && CANDIDATES+=("$MASTER_URL")
+if [ -n "$ENDPOINTS" ]; then
+  IFS=',' read -r -a EP_LIST <<< "$ENDPOINTS"
+  for EP in "${EP_LIST[@]}"; do
+    EP="$(echo "$EP" | tr -d ' \n\r')"
+    [ -n "$EP" ] && CANDIDATES+=("$EP")
+  done
+fi
+[ -n "$TAILSCALE_HOST" ] && CANDIDATES+=("http://${TAILSCALE_HOST}:9090")
+[ -n "$TAILSCALE_IP" ] && CANDIDATES+=("http://${TAILSCALE_IP}:9090")
+
+# Deduplicate (strip trailing slashes)
+declare -A SEEN=()
+DEDUPED=()
+for C in "${CANDIDATES[@]}"; do
+  C="$(echo "$C" | sed 's#/*$##')"
+  if [ -n "$C" ] && [ -z "${SEEN[$C]}" ]; then
+    SEEN["$C"]=1
+    DEDUPED+=("$C")
+  fi
+done
 
 # Sertakan public key saat registrasi agar Master bisa catat untuk SSH
 SSH_PUBKEY_CONTENT=$(cat "${SSH_KEY}.pub" 2>/dev/null || echo "")
 
-REG_RESP=$(curl -s -f -X POST "${MASTER_URL}/api/nodes/register" \
-  -H "Content-Type: application/json" \
-  -d "{\"token\": \"${TOKEN}\", \"node_id\": \"${NODE_ID}\", \"node_name\": \"${NODE_NAME}\", \"ssh_pubkey\": \"${SSH_PUBKEY_CONTENT}\"}" || echo "")
+REG_RESP=""
+REG_MASTER=""
+for CAND in "${DEDUPED[@]}"; do
+  echo "${DIM}  → Mencoba Master: ${CAND}${R}"
+  REG_RESP=$(curl -s -f -m 8 -X POST "${CAND}/api/nodes/register" \
+    -H "Content-Type: application/json" \
+    -d "{\"token\": \"${TOKEN}\", \"node_id\": \"${NODE_ID}\", \"node_name\": \"${NODE_NAME}\", \"custom_ip_domain\": \"${CUSTOM_IP_DOMAIN}\", \"ssh_pubkey\": \"${SSH_PUBKEY_CONTENT}\"}" || echo "")
+  if [ -n "$REG_RESP" ]; then
+    REG_MASTER="$CAND"
+    break
+  fi
+done
 
 if [[ -z "$REG_RESP" ]]; then
-  echo "${RED}✗ Registrasi gagal. Token tidak valid atau Master tidak dapat dijangkau di ${MASTER_URL}${R}"
+  echo "${RED}✗ Registrasi gagal di semua endpoint Master.${R}"
+  echo "  Endpoint yang dicoba: ${DEDUPED[*]}"
+  echo "  Pastikan token valid dan salah satu endpoint dapat dijangkau node ini."
   exit 1
 fi
+
+# MASTER_URL = the endpoint that worked (used for downloads); agent keeps all candidates
+MASTER_URL="${REG_MASTER}"
+AGENT_MASTER_URLS="$(IFS=','; echo "${DEDUPED[*]}")"
 
 SECRET_TOKEN=$(echo "$REG_RESP" | grep -o '"secret_token":"[^"]*' | cut -d'"' -f4 || echo "")
 if [[ -z "$SECRET_TOKEN" ]]; then
@@ -164,17 +283,27 @@ if [[ -z "$SECRET_TOKEN" ]]; then
 fi
 
 echo "${GRN}✓ Registrasi berhasil! Node ID: ${NODE_ID}${R}"
+echo "${GRN}✓ Master terhubung via: ${MASTER_URL}${R}"
 
 # ── Step 2: Directories & Agent Env Setup ─────────────────────────────────────
 echo "${DIM}[4/6] Menyiapkan direktori & file konfigurasi aman...${R}"
 mkdir -p /etc/lxd-manager /usr/local/bin
 
+# Auto-detect LXD/Incus daemon socket path
+LXD_SOCKET="/var/lib/lxd/unix.socket"
+for _s in /var/snap/lxd/common/lxd/unix.socket /var/lib/lxd/unix.socket /var/lib/incus/unix.socket; do
+  if [ -S "$_s" ]; then
+    LXD_SOCKET="$_s"
+    break
+  fi
+done
+
 cat > /etc/lxd-manager/agent.env << EOF
-MASTER_URL="${MASTER_URL}"
+MASTER_URL="${AGENT_MASTER_URLS}"
 NODE_ID="${NODE_ID}"
 NODE_NAME="${NODE_NAME}"
 AGENT_SECRET="${SECRET_TOKEN}"
-LXD_SOCKET="/var/snap/lxd/common/lxd/unix.socket"
+LXD_SOCKET="${LXD_SOCKET}"
 SPACE_USER="${SPACE_USER}"
 SPACE_HOME="${SPACE_HOME}"
 EOF

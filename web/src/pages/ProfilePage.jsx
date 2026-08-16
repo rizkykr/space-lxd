@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Card, Button, Input } from '../components/ui/primitives';
-import { Key, AlertCircle } from 'lucide-react';
+import { Key, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 export function ProfilePage({ user }) {
+  const { t } = useI18n();
   const [passForm, setPassForm] = useState({ old_password: '', new_password: '', confirm_password: '' });
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
 
@@ -11,7 +13,7 @@ export function ProfilePage({ user }) {
     setStatusMsg({ type: '', text: '' });
 
     if (passForm.new_password !== passForm.confirm_password) {
-      return setStatusMsg({ type: 'error', text: 'Password baru dan konfirmasi tidak cocok!' });
+      return setStatusMsg({ type: 'error', text: t('profile.passwordMismatch') });
     }
 
     try {
@@ -25,7 +27,7 @@ export function ProfilePage({ user }) {
         })
       });
       if (res.ok) {
-        setStatusMsg({ type: 'success', text: 'Password berhasil diperbarui!' });
+        setStatusMsg({ type: 'success', text: t('profile.passwordUpdated') });
         setPassForm({ old_password: '', new_password: '', confirm_password: '' });
       } else {
         setStatusMsg({ type: 'error', text: await res.text() });
@@ -38,8 +40,8 @@ export function ProfilePage({ user }) {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-xl font-bold text-foreground tracking-tight">Admin Profile & Security</h1>
-        <p className="text-xs text-muted-foreground">Kelola profil pengguna dan ubah kata sandi akun</p>
+        <h1 className="text-xl font-bold text-foreground tracking-tight">{t('profile.title')}</h1>
+        <p className="text-xs text-muted-foreground">{t('profile.subtitle')}</p>
       </div>
 
       <Card className="p-6 space-y-6">
@@ -49,25 +51,25 @@ export function ProfilePage({ user }) {
           </div>
           <div>
             <h2 className="text-base font-bold text-foreground">{user?.username || 'admin'}</h2>
-            <p className="text-xs font-mono text-primary">Role: Administrator (Superuser)</p>
+            <p className="text-xs font-mono text-primary">{t('profile.role')}</p>
           </div>
         </div>
 
         <form onSubmit={handleChangePassword} className="space-y-4 text-xs font-sans">
           <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
             <Key className="size-4 text-primary" />
-            <span>Ubah Password Akun</span>
+            <span>{t('profile.changePassword')}</span>
           </h3>
 
           {statusMsg.text && (
             <div className={`p-3 rounded-md flex items-center gap-2 font-mono ${statusMsg.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-destructive/10 text-destructive-foreground border border-destructive/30'}`}>
-              <AlertCircle className="size-4 shrink-0" />
+              {statusMsg.type === 'success' ? <CheckCircle2 className="size-4 shrink-0" /> : <AlertCircle className="size-4 shrink-0" />}
               <span>{statusMsg.text}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-foreground font-medium mb-1">Password Saat Ini</label>
+            <label className="block text-foreground font-medium mb-1">{t('profile.currentPassword')}</label>
             <Input
               type="password"
               value={passForm.old_password}
@@ -77,7 +79,7 @@ export function ProfilePage({ user }) {
           </div>
 
           <div>
-            <label className="block text-foreground font-medium mb-1">Password Baru</label>
+            <label className="block text-foreground font-medium mb-1">{t('profile.newPassword')}</label>
             <Input
               type="password"
               value={passForm.new_password}
@@ -87,7 +89,7 @@ export function ProfilePage({ user }) {
           </div>
 
           <div>
-            <label className="block text-foreground font-medium mb-1">Konfirmasi Password Baru</label>
+            <label className="block text-foreground font-medium mb-1">{t('profile.confirmPassword')}</label>
             <Input
               type="password"
               value={passForm.confirm_password}
@@ -97,10 +99,12 @@ export function ProfilePage({ user }) {
           </div>
 
           <Button type="submit">
-            Update Password
+            {t('profile.updatePassword')}
           </Button>
         </form>
       </Card>
     </div>
   );
 }
+
+export default ProfilePage;

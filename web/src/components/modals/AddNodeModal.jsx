@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from '../ui/primitives';
 import { Server, X, Copy, Check, Sparkles } from 'lucide-react';
+import { useI18n } from '../../i18n';
 
 export function AddNodeModal({ joinTokenData, onClose, onRefreshNodes }) {
+  const { t } = useI18n();
   const [nodeNameInput, setNodeNameInput] = useState('');
   const [copied, setCopied] = useState(false);
   const [initialNodesCount, setInitialNodesCount] = useState(0);
   const [detectedNode, setDetectedNode] = useState(null);
 
-  // Realtime Polling Detection: jika ada node baru bergabung saat modal terbuka
+  // Realtime Polling Detection: if a new node joins while modal is open
   useEffect(() => {
     let interval;
     const checkNewNodes = async () => {
@@ -34,7 +36,7 @@ export function AddNodeModal({ joinTokenData, onClose, onRefreshNodes }) {
 
   const rawCmd = joinTokenData?.join_command || '';
   
-  // Format perintah join dengan menyertakan flag --name jika user menginputkan nama node
+  // Format join command with --name flag if user provides custom name
   const formattedCmd = nodeNameInput.trim()
     ? `${rawCmd} --name "${nodeNameInput.trim()}"`
     : rawCmd;
@@ -42,7 +44,6 @@ export function AddNodeModal({ joinTokenData, onClose, onRefreshNodes }) {
   const copyCmd = () => {
     if (!formattedCmd) return;
     
-    // Robust Clipboard Copy (dengan fallback execCommand)
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(formattedCmd).then(() => {
         setCopied(true);
@@ -75,7 +76,7 @@ export function AddNodeModal({ joinTokenData, onClose, onRefreshNodes }) {
         <div className="flex items-center justify-between border-b border-border pb-4">
           <h3 className="text-base font-bold text-foreground flex items-center gap-2">
             <Server className="size-5 text-primary" />
-            <span>Add New Worker Node Server</span>
+            <span>{t('addnode.title')}</span>
           </h3>
           <Button variant="ghost" size="icon" onClick={onClose}><X className="size-5" /></Button>
         </div>
@@ -84,38 +85,36 @@ export function AddNodeModal({ joinTokenData, onClose, onRefreshNodes }) {
           <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-lg space-y-2 text-emerald-400">
             <div className="flex items-center gap-2 font-bold text-sm">
               <Sparkles className="size-4 animate-bounce" />
-              <span>Node Baru Terdeteksi & Otomatis Terhubung!</span>
+              <span>{t('addnode.detectedTitle')}</span>
             </div>
             <p className="text-xs font-mono text-foreground">
-              Node <strong className="text-emerald-400">{detectedNode.name}</strong> ({detectedNode.ip}) telah berhasil bergabung dengan kluster dan kunci SSH service user telah dikonfigurasi.
+              {t('addnode.detectedMsg', { name: detectedNode.name, ip: detectedNode.ip })}
             </p>
             <Button size="sm" className="mt-2 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={onClose}>
-              Selesai & Buka Node
+              {t('addnode.done')}
             </Button>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Input Nama Node terlebih dahulu */}
             <div className="space-y-1.5">
               <label className="text-xs font-mono uppercase text-muted-foreground font-bold">
-                1. Masukkan Nama Node Server (Opsional):
+                {t('addnode.nodeName')}
               </label>
               <Input
                 type="text"
                 value={nodeNameInput}
                 onChange={(e) => setNodeNameInput(e.target.value)}
-                placeholder="misal: Worker-Surabaya-01"
+                placeholder={t('addnode.nodeNamePlaceholder')}
                 className="text-xs font-mono"
               />
               <p className="text-[11px] text-muted-foreground">
-                Jika diisi, script di bawah otomatis menyertakan parameter <code className="text-primary">--name "{nodeNameInput.trim() || 'Worker-01'}"</code>.
+                {t('addnode.nodeNameHint', { name: nodeNameInput.trim() || 'Worker-01' })}
               </p>
             </div>
 
-            {/* Script Command Display */}
             <div className="space-y-1.5">
               <label className="text-xs font-mono uppercase text-muted-foreground font-bold">
-                2. Jalankan Perintah Ini di Terminal Node Worker (Sudo Bash):
+                {t('addnode.command')}
               </label>
               <div className="bg-background border border-border rounded-md p-3.5 font-mono text-xs text-primary break-all select-all relative group">
                 {formattedCmd}
@@ -124,25 +123,25 @@ export function AddNodeModal({ joinTokenData, onClose, onRefreshNodes }) {
 
             <div className="flex items-center justify-between pt-2">
               <span className="text-xs font-mono text-muted-foreground">
-                ⏳ Token berlaku: <strong className="text-foreground">{joinTokenData?.expires_in || '30m'}</strong>
+                ⏳ {t('addnode.tokenExpires', { t: joinTokenData?.expires_in || '30m' })}
               </span>
               <Button onClick={copyCmd} className="flex items-center gap-2">
                 {copied ? (
                   <>
                     <Check className="size-4 text-emerald-400" />
-                    <span>Copied to Clipboard!</span>
+                    <span>{t('addnode.copied')}</span>
                   </>
                 ) : (
                   <>
                     <Copy className="size-4" />
-                    <span>Copy Join Command</span>
+                    <span>{t('addnode.copy')}</span>
                   </>
                 )}
               </Button>
             </div>
 
             <div className="text-[11px] text-muted-foreground bg-accent/30 p-3 rounded border border-border font-mono">
-              💡 <strong>Otomatisasi SSH:</strong> Setelah perintah di atas dijalankan di server worker, installer akan membuat user <code className="text-primary">space-lxd</code>, mengkonfigurasi SSH keypair, dan mendaftarkan public key secara otomatis ke Master.
+              💡 {t('addnode.sshNote')}
             </div>
           </div>
         )}
@@ -150,3 +149,5 @@ export function AddNodeModal({ joinTokenData, onClose, onRefreshNodes }) {
     </div>
   );
 }
+
+export default AddNodeModal;

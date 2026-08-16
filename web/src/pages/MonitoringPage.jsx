@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Card, Button, Badge, Select } from '../components/ui/primitives';
 import { SVGSparklineChart } from '../utils/SVGSparklineChart';
 import { TerminalModal } from '../components/modals/TerminalModal';
 import { LineChart, ChevronDown, ChevronUp, Terminal, Play, Square, Sliders } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 export function MonitoringPage() {
   const { nodes, fetchNodes, addToast } = useOutletContext();
   const navigate = useNavigate();
+  const { t } = useI18n();
+
   const [selectedNodeId, setSelectedNodeId] = useState('all');
   const [expandedNodes, setExpandedNodes] = useState({});
   const [activeTerminalTarget, setActiveTerminalTarget] = useState(null);
@@ -15,32 +18,29 @@ export function MonitoringPage() {
   const [cpuHistory, setCpuHistory] = useState({});
   const [ramHistory, setRamHistory] = useState({});
   const [netHistory, setNetHistory] = useState({});
+  const [netRate, setNetRate] = useState({});
+  const prevNet = useRef({});
 
+  // Drive charts from the realtime snapshot pushed by the master WebSocket (~2s).
   useEffect(() => {
-    const interval = setInterval(() => {
-      nodes.forEach(n => {
-        const cpuVal = (n.cpu_usage_pct || 0) + (Math.random() * 3 - 1.5);
-        const ramVal = n.ram_total_mb > 0 ? ((n.ram_used_mb / n.ram_total_mb) * 100) : 0;
-        const netVal = Math.floor(100 + Math.random() * 250);
+    nodes.forEach(n => {
+      const cpuVal = Math.max(0, Math.min(100, n.cpu_usage_pct || 0));
+      const ramVal = n.ram_total_mb > 0 ? Math.max(0, Math.min(100, (n.ram_used_mb / n.ram_total_mb) * 100)) : 0;
 
-        setCpuHistory(prev => ({
-          ...prev,
-          [n.id]: [...(prev[n.id] || [12, 18, 15, 20, cpuVal]), Math.max(2, Math.min(98, cpuVal))].slice(-15)
-        }));
+      setCpuHistory(prev => ({ ...prev, [n.id]: [...(prev[n.id] || []), cpuVal].slice(-20) }));
+      setRamHistory(prev => ({ ...prev, [n.id]: [...(prev[n.id] || []), ramVal].slice(-20) }));
 
-        setRamHistory(prev => ({
-          ...prev,
-          [n.id]: [...(prev[n.id] || [40, 42, 45, 43, ramVal]), Math.max(5, Math.min(95, ramVal))].slice(-15)
-        }));
+      // Network rate (KB/s) from cumulative counter deltas across ~2s ticks.
+      const rx = n.net_rx_bytes || 0;
+      const tx = n.net_tx_bytes || 0;
+      const prevRx = prevNet.current[n.id]?.rx ?? rx;
+      const prevTx = prevNet.current[n.id]?.tx ?? tx;
+      const rate = (Math.max(0, rx - prevRx) + Math.max(0, tx - prevTx)) / 2048;
+      prevNet.current[n.id] = { rx, tx };
 
-        setNetHistory(prev => ({
-          ...prev,
-          [n.id]: [...(prev[n.id] || [80, 120, 190, 140, netVal]), netVal].slice(-15)
-        }));
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
+      setNetRate(prev => ({ ...prev, [n.id]: rate }));
+      setNetHistory(prev => ({ ...prev, [n.id]: [...(prev[n.id] || []), rate].slice(-20) }));
+    });
   }, [nodes]);
 
   const toggleExpandNode = (nodeId) => {
@@ -57,7 +57,7 @@ export function MonitoringPage() {
         body: JSON.stringify({ action, name: lxdName })
       });
       if (res.ok) {
-        addToast('success', `Aksi '${action}' dieksekusi pada ${lxdName}`);
+        addToast('success', t('mon.actionDone', { action, name: lxdName }));
         fetchNodes();
       } else {
         addToast('error', await res.text());
@@ -73,9 +73,9 @@ export function MonitoringPage() {
         <div>
           <h1 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-3">
             <LineChart className="size-5 text-emerald-400" />
-            <span>Realtime Resource Telemetry</span>
+            <span>{t('mon.title')}</span>
           </h1>
-          <p className="text-xs text-muted-foreground">Grafik penggunaan CPU, RAM Memory, dan Network I/O seluruh Node Server</p>
+          <p className="text-xs text-muted-foreground">{t('mon.subtitle')}</p>
         </div>
 
         <Select
@@ -83,8 +83,8 @@ export function MonitoringPage() {
           onChange={(e) => setSelectedNodeId(e.target.value)}
           className="w-full sm:w-64"
         >
-          <option value="all">🌐 All Node Servers ({nodes.length})</option>
-          {nodes.map(n => <option key={n.id} value={n.id}>🖥 Node: {n.name}</option>)}
+          <option value="all">🌐 {t('mon.allNodes', { n: nodes.length })}</option>
+          {nodes.map(n => <option key={n.id} value={n.id}>🖥 {t('mon.node', { name: n.name })}</option>)}
         </Select>
       </div>
 
@@ -100,7 +100,7 @@ export function MonitoringPage() {
                   <div className="flex items-center gap-3">
                     <span className={`size-3 rounded-full ${node.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground'}`}></span>
                     <h2 className="text-lg font-bold text-foreground tracking-tight">{node.name}</h2>
-                    {node.is_master ? <Badge variant="info">MASTER NODE</Badge> : <Badge variant="secondary">WORKER NODE</Badge>}
+                    {node.is_master ? <Badge variant="info">{t('node.masterNode')}</Badge> : <Badge variant="secondary">{t('node.workerNode')}</Badge>}
                   </div>
                   <p className="text-xs font-mono text-muted-foreground mt-1">
                     IP Address: {node.ip || '127.0.0.1'} | OS: {node.os_name || 'Linux'} | Active LXDs: {nodeLXDs.length} containers
@@ -108,7 +108,7 @@ export function MonitoringPage() {
                 </div>
 
                 <Button variant="outline" size="sm" onClick={() => toggleExpandNode(node.id)}>
-                  <span>{isExpanded ? 'Sembunyikan LXD Containers' : `Tampilkan Container (${nodeLXDs.length})`}</span>
+                  <span>{isExpanded ? t('mon.hideContainers') : t('mon.showContainers', { n: nodeLXDs.length })}</span>
                   {isExpanded ? <ChevronUp className="size-4 ml-1" /> : <ChevronDown className="size-4 ml-1" />}
                 </Button>
               </div>
@@ -116,7 +116,7 @@ export function MonitoringPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs font-mono">
-                    <span className="text-foreground font-bold">CPU Usage</span>
+                    <span className="text-foreground font-bold">{t('mon.cpu')}</span>
                     <span className="text-sky-400 font-bold">{(node.cpu_usage_pct || 15).toFixed(1)}%</span>
                   </div>
                   <SVGSparklineChart points={cpuHistory[node.id] || [12, 18, 15, 20, 25]} color="#38bdf8" max={100} height={120} />
@@ -124,7 +124,7 @@ export function MonitoringPage() {
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs font-mono">
-                    <span className="text-foreground font-bold">RAM Memory</span>
+                    <span className="text-foreground font-bold">{t('mon.ram')}</span>
                     <span className="text-purple-400 font-bold">
                       {(node.ram_used_mb / 1024).toFixed(1)} / {(node.ram_total_mb / 1024).toFixed(1)} GB
                     </span>
@@ -134,33 +134,33 @@ export function MonitoringPage() {
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs font-mono">
-                    <span className="text-foreground font-bold">Network I/O</span>
-                    <span className="text-emerald-400 font-bold">245 KB/s</span>
+                    <span className="text-foreground font-bold">{t('mon.network')}</span>
+                    <span className="text-emerald-400 font-bold">{t('mon.kbs', { n: (netRate[node.id] || 0).toFixed(1) })}</span>
                   </div>
-                  <SVGSparklineChart points={netHistory[node.id] || [80, 120, 190, 140, 210]} color="#10b981" max={300} height={120} />
+                  <SVGSparklineChart points={netHistory[node.id] || [0]} color="#10b981" max={500} height={120} />
                 </div>
               </div>
 
               {isExpanded && (
                 <div className="pt-4 border-t border-border space-y-3 animate-fade-in">
                   <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider font-mono">
-                    Container Telemetry & Quick Action ({nodeLXDs.length})
+                    {t('mon.containerTelemetry')} ({nodeLXDs.length})
                   </h3>
 
                   <div className="overflow-x-auto border border-border rounded-lg">
                     <table className="w-full text-left border-collapse text-xs font-mono">
                       <thead>
                         <tr className="bg-background border-b border-border text-muted-foreground uppercase text-[10px]">
-                          <th className="py-2.5 px-3">Container</th>
+                          <th className="py-2.5 px-3">{t('mon.container')}</th>
                           <th className="py-2.5 px-3">Status</th>
-                          <th className="py-2.5 px-3">IP Address</th>
-                          <th className="py-2.5 px-3">RAM Used</th>
-                          <th className="py-2.5 px-3 text-right">Action</th>
+                          <th className="py-2.5 px-3">{t('mon.ip')}</th>
+                          <th className="py-2.5 px-3">{t('mon.ramUsed')}</th>
+                          <th className="py-2.5 px-3 text-right">{t('mon.action')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border font-sans">
                         {nodeLXDs.length === 0 ? (
-                          <tr><td colSpan="5" className="text-center py-6 text-muted-foreground">Belum ada container di node ini.</td></tr>
+                          <tr><td colSpan="5" className="text-center py-6 text-muted-foreground">{t('mon.noContainers')}</td></tr>
                         ) : (
                           nodeLXDs.map((lxd, idx) => {
                             const isRunning = lxd.status.toLowerCase() === 'running';
@@ -174,20 +174,20 @@ export function MonitoringPage() {
                                 <td className="py-2.5 px-3 font-mono">{lxd.ram_used_mb ? `${lxd.ram_used_mb} MB` : '—'}</td>
                                 <td className="py-2.5 px-3 text-right">
                                   <div className="flex items-center justify-end gap-1">
-                                    <Button variant="ghost" size="icon" onClick={() => navigate(`/lxds/${node.id}/${lxd.name}`)} title="Inspect LXD">
+                                    <Button variant="ghost" size="icon" onClick={() => navigate(`/lxds/${node.id}/${lxd.name}`)} title={t('mon.inspect')}>
                                       <Sliders className="size-3.5 text-muted-foreground" />
                                     </Button>
                                     {isRunning ? (
                                       <>
-                                        <Button variant="ghost" size="icon" onClick={() => setActiveTerminalTarget({ ...lxd, node_name: node.name })} title="Terminal">
+                                        <Button variant="ghost" size="icon" onClick={() => setActiveTerminalTarget({ ...lxd, node_name: node.name })} title={t('mon.terminal')}>
                                           <Terminal className="size-3.5 text-primary" />
                                         </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handleLXDAction(node.id, 'stop', lxd.name)} title="Stop">
+                                        <Button variant="ghost" size="icon" onClick={() => handleLXDAction(node.id, 'stop', lxd.name)} title={t('mon.stop')}>
                                           <Square className="size-3.5 text-amber-400" />
                                         </Button>
                                       </>
                                     ) : (
-                                      <Button variant="ghost" size="icon" onClick={() => handleLXDAction(node.id, 'start', lxd.name)} title="Start">
+                                      <Button variant="ghost" size="icon" onClick={() => handleLXDAction(node.id, 'start', lxd.name)} title={t('mon.start')}>
                                         <Play className="size-3.5 text-emerald-400" />
                                       </Button>
                                     )}
@@ -213,3 +213,5 @@ export function MonitoringPage() {
     </div>
   );
 }
+
+export default MonitoringPage;

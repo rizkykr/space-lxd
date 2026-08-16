@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,13 +27,31 @@ import (
 	"lxd-manager-dashboard/pkg/ws"
 )
 
+type NodeSnapshot struct {
+	db.Node
+	Instances  []lxd.LXD `json:"instances"`
+	Lxds       []lxd.LXD `json:"lxds"`
+	NetRxBytes uint64     `json:"net_rx_bytes"`
+	NetTxBytes uint64     `json:"net_tx_bytes"`
+}
+
 type Server struct {
 	cfg        config.MasterConfig
 	db         *db.DB
 	hub        *ws.Hub
 	upgrader   websocket.Upgrader
 	dashConns  sync.Map // *websocket.Conn -> bool
+
+	clusterMu   sync.Mutex
+	clusterSnap []NodeSnapshot
+	clusterAt   time.Time
+
+	versionMu  sync.Mutex
+	versionInfo *updater.VersionInfo
+	versionAt  time.Time
 }
+
+const clusterSnapshotTTL = 5 * time.Second
 
 func main() {
 	cfg := config.LoadMasterConfig()
@@ -118,6 +137,7 @@ func main() {
 	mux.HandleFunc("/api/nodes", srv.handleGetNodes)
 	mux.HandleFunc("/api/nodes/join-token", srv.handleCreateJoinToken)
 	mux.HandleFunc("/api/nodes/register", srv.handleAgentRegister)
+	mux.HandleFunc("/api/nodes/endpoints", srv.handleGetEndpoints)
 	mux.HandleFunc("/api/nodes/", srv.handleNodeAction)
 	mux.HandleFunc("/api/storage-pools", srv.handleGetStoragePools)
 	mux.HandleFunc("/api/networks", srv.handleGetNetworks)
@@ -157,9 +177,59 @@ func main() {
 	})
 
 	log.Printf("🌐 Master Dashboard ready at: %s", cfg.MasterPublic)
-	if err := http.Serve(listener, srv.corsMiddleware(mux)); err != nil {
+	if err := http.Serve(listener, srv.corsMiddleware(srv.gzipMiddleware(auth.JWTMiddleware(srv.cfg.JWTSecret, mux)))); err != nil {
 		log.Fatalf("❌ HTTP Server stopped: %v", err)
 	}
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	gz            *gzip.Writer
+	headerWritten bool
+}
+
+func (w *gzipResponseWriter) WriteHeader(code int) {
+	if w.headerWritten {
+		return
+	}
+	w.headerWritten = true
+	w.Header().Del("Content-Length")
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *gzipResponseWriter) Write(b []byte) (int, error) {
+	if !w.headerWritten {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.gz.Write(b)
+}
+
+func (w *gzipResponseWriter) Flush() {
+	if w.gz != nil {
+		_ = w.gz.Flush()
+	}
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// gzipMiddleware compresses static & JSON responses. Streaming endpoints
+// (launch stream, system update, WebSockets) are skipped to keep flush working.
+func (s *Server) gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") ||
+			strings.HasPrefix(r.URL.Path, "/ws/") ||
+			strings.HasPrefix(r.URL.Path, "/api/system/update") ||
+			r.URL.Query().Get("stream") == "true" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		next.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, gz: gz}, r)
+	})
 }
 
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
@@ -180,10 +250,12 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	hasAdmin := s.db.HasUsers()
 	masterPub := s.db.GetSetting("master_public_url", s.cfg.MasterPublic)
+	lang := s.db.GetSetting("language", "en")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"setup_completed": hasAdmin,
 		"master_public":   masterPub,
+		"language":        lang,
 	})
 }
 
@@ -196,6 +268,11 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 		Username     string `json:"username"`
 		Password     string `json:"password"`
 		MasterPublic string `json:"master_public"`
+		Language     string `json:"language"`
+		Timezone     string `json:"timezone"`
+		DefaultRAM   string `json:"default_ram_gb"`
+		DefaultCPU   string `json:"default_cpu_cores"`
+		DefaultDisk  string `json:"default_disk_gb"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Username == "" || req.Password == "" {
 		http.Error(w, "Invalid username or password", http.StatusBadRequest)
@@ -210,6 +287,26 @@ func (s *Server) handleAuthSetup(w http.ResponseWriter, r *http.Request) {
 
 	if req.MasterPublic != "" {
 		s.cfg.MasterPublic = req.MasterPublic
+	}
+
+	// Persist optional initial configuration chosen during the setup wizard
+	if req.Language != "" {
+		_ = s.db.SetSetting("language", req.Language)
+	}
+	if req.Timezone != "" {
+		_ = s.db.SetSetting("global_timezone", req.Timezone)
+	}
+	if req.DefaultRAM != "" {
+		_ = s.db.SetSetting("default_ram_gb", req.DefaultRAM)
+	}
+	if req.DefaultCPU != "" {
+		_ = s.db.SetSetting("default_cpu_cores", req.DefaultCPU)
+	}
+	if req.DefaultDisk != "" {
+		_ = s.db.SetSetting("default_disk_gb", req.DefaultDisk)
+	}
+	if req.MasterPublic != "" {
+		_ = s.db.SetSetting("master_public_url", req.MasterPublic)
 	}
 
 	token, _ := auth.GenerateToken(user.ID, user.Username, user.Role, s.cfg.JWTSecret)
@@ -280,21 +377,36 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetNodes(w http.ResponseWriter, r *http.Request) {
+	snapshot := s.getClusterSnapshot()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(snapshot)
+}
+
+// getClusterSnapshot returns the cached cluster-wide node+instance snapshot,
+// rebuilt at most once per clusterSnapshotTTL to avoid hammering LXD & exec.
+func (s *Server) getClusterSnapshot() []NodeSnapshot {
+	s.clusterMu.Lock()
+	defer s.clusterMu.Unlock()
+
+	if s.clusterSnap != nil && time.Since(s.clusterAt) < clusterSnapshotTTL {
+		return s.clusterSnap
+	}
+
+	s.clusterSnap = s.buildClusterSnapshot()
+	s.clusterAt = time.Now()
+	return s.clusterSnap
+}
+
+func (s *Server) buildClusterSnapshot() []NodeSnapshot {
 	nodes, err := s.db.GetAllNodes()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return []NodeSnapshot{}
 	}
 
-	type NodeResponse struct {
-		db.Node
-		Instances []lxd.LXD `json:"instances"`
-		Lxds      []lxd.LXD `json:"lxds"`
-	}
-
-	var result []NodeResponse
+	result := make([]NodeSnapshot, 0, len(nodes))
 	for _, n := range nodes {
 		insts := []lxd.LXD{}
+		var netRx, netTx uint64
 		if agent, ok := s.hub.GetAgent(n.ID); ok {
 			n.Status = "online"
 			n.CPUUsagePct = agent.HostStats.CPUUsagePct
@@ -311,6 +423,8 @@ func (s *Server) handleGetNodes(w http.ResponseWriter, r *http.Request) {
 			if agent.HostStats.IP != "" {
 				n.IP = agent.HostStats.IP
 			}
+			netRx = agent.HostStats.NetRxBytes
+			netTx = agent.HostStats.NetTxBytes
 			insts = agent.Instances
 		} else if n.IsMaster {
 			n.Status = "online"
@@ -330,17 +444,19 @@ func (s *Server) handleGetNodes(w http.ResponseWriter, r *http.Request) {
 			if stats.IP != "" {
 				n.IP = stats.IP
 			}
+			netRx = stats.NetRxBytes
+			netTx = stats.NetTxBytes
 			insts, _ = client.ListInstances()
 		}
-		result = append(result, NodeResponse{
-			Node:      n,
-			Instances: insts,
-			Lxds:      insts,
+		result = append(result, NodeSnapshot{
+			Node:       n,
+			Instances:  insts,
+			Lxds:       insts,
+			NetRxBytes: netRx,
+			NetTxBytes: netTx,
 		})
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(result)
+	return result
 }
 
 func (s *Server) handleCreateJoinToken(w http.ResponseWriter, r *http.Request) {
@@ -356,14 +472,130 @@ func (s *Server) handleCreateJoinToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	masterHost := s.cfg.MasterPublic
-	joinCommand := fmt.Sprintf("curl -sSL %s/join.sh | sudo bash -s -- --master %s --token %s", masterHost, masterHost, tokenStr)
+	eps := strings.Join(s.discoverMasterEndpoints(), ",")
+	joinCommand := fmt.Sprintf("curl -sSL %s/join.sh | sudo bash -s -- --master %s --endpoints '%s' --token %s", masterHost, masterHost, eps, tokenStr)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"token":        tokenStr,
 		"expires_in":   "60 minutes",
 		"join_command": joinCommand,
+		"endpoints":    eps,
 	})
+}
+
+// handleGetEndpoints returns the candidate master URLs workers can reach,
+// used by join.sh to auto-probe the fastest reachable path (public IP, LAN, Tailscale, or domain).
+func (s *Server) handleGetEndpoints(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"endpoints": s.discoverMasterEndpoints(),
+	})
+}
+
+// discoverMasterEndpoints builds the prioritized list of URLs the master
+// believes it is reachable at: configured public URL, Tailscale, then local IPs.
+func (s *Server) discoverMasterEndpoints() []string {
+	var eps []string
+	seen := map[string]bool{}
+	add := func(u string) {
+		u = strings.TrimRight(strings.TrimSpace(u), "/")
+		if u == "" || seen[u] {
+			return
+		}
+		seen[u] = true
+		eps = append(eps, u)
+	}
+
+	// 1. Configured public URL (domain / MagicDNS hostname), if any
+	masterPub := s.db.GetSetting("master_public_url", s.cfg.MasterPublic)
+	if masterPub == "" {
+		masterPub = s.cfg.MasterPublic
+	}
+	add(masterPub)
+
+	port := s.cfg.Port
+	if port == "" {
+		port = "9090"
+	}
+
+	// 2. Tailscale: MagicDNS hostname + 100.x.y.z IP (works behind NAT/CGNAT)
+	tsIP, tsName := detectTailscale()
+	if tsIP != "" {
+		add(fmt.Sprintf("http://%s:%s", tsIP, port))
+	}
+	if tsName != "" {
+		add(fmt.Sprintf("http://%s:%s", tsName, port))
+	}
+
+	// 3. All local non-loopback IPv4 (public & private LAN)
+	for _, ip := range getLocalIPs() {
+		add(fmt.Sprintf("http://%s:%s", ip, port))
+	}
+
+	return eps
+}
+
+// detectTailscale returns the node's Tailscale IPv4 and MagicDNS hostname (if any).
+func detectTailscale() (ip, name string) {
+	out, err := exec.Command("tailscale", "ip", "-4").Output()
+	if err == nil {
+		first := strings.TrimSpace(strings.Split(strings.TrimSpace(string(out)), "\n")[0])
+		if first != "" {
+			ip = first
+		}
+	}
+	out2, err2 := exec.Command("tailscale", "status", "--json").Output()
+	if err2 == nil {
+		var st struct {
+			MagicDNSSuffix string `json:"MagicDNSSuffix"`
+			Self           struct {
+				DNSName string `json:"DNSName"`
+			} `json:"Self"`
+		}
+		if json.Unmarshal(out2, &st) == nil {
+			if st.Self.DNSName != "" {
+				name = strings.TrimSuffix(st.Self.DNSName, ".")
+			} else if st.MagicDNSSuffix != "" {
+				if h, err := os.Hostname(); err == nil {
+					name = fmt.Sprintf("%s.%s", h, st.MagicDNSSuffix)
+				}
+			}
+		}
+	}
+	return ip, name
+}
+
+// getLocalIPs enumerates all non-loopback IPv4 addresses on the host.
+func getLocalIPs() []string {
+	var ips []string
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ips
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			var ip net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.To4() == nil {
+				continue
+			}
+			ips = append(ips, ip.String())
+		}
+	}
+	return ips
 }
 
 func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
@@ -373,9 +605,10 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Token    string `json:"token"`
-		NodeID   string `json:"node_id"`
-		NodeName string `json:"node_name"`
+		Token          string `json:"token"`
+		NodeID         string `json:"node_id"`
+		NodeName       string `json:"node_name"`
+		CustomIPDomain string `json:"custom_ip_domain"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid body", http.StatusBadRequest)
@@ -390,12 +623,13 @@ func (s *Server) handleAgentRegister(w http.ResponseWriter, r *http.Request) {
 	secretToken := auth.GenerateRandomToken(32)
 
 	err := s.db.UpsertNode(db.Node{
-		ID:          req.NodeID,
-		Name:        req.NodeName,
-		IP:          r.RemoteAddr,
-		Status:      "online",
-		SecretToken: secretToken,
-		IsMaster:    false,
+		ID:             req.NodeID,
+		Name:           req.NodeName,
+		IP:             r.RemoteAddr,
+		CustomIPDomain: strings.TrimSpace(req.CustomIPDomain),
+		Status:         "online",
+		SecretToken:    secretToken,
+		IsMaster:       false,
 	})
 	if err != nil {
 		http.Error(w, "Failed to register node", http.StatusInternalServerError)
@@ -433,6 +667,12 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 		Autostart      bool   `json:"autostart"`
 		SSHKey         string `json:"ssh_key"`
 		TemplatePreset string `json:"template_preset"`
+		StoragePool    string `json:"storage_pool"`
+		Network        string `json:"network"`
+		Privileged     bool   `json:"privileged"`
+		Nesting        bool   `json:"nesting"`
+		CPUAllowance   string `json:"cpu_allowance"`
+		MemorySwap     bool   `json:"memory_swap"`
 		SnapName       string `json:"snap_name"`
 		SnapEnabled    bool   `json:"snap_enabled"`
 		SnapCron       string `json:"snap_cron"`
@@ -579,7 +819,23 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				err = lxdClient.LaunchInstanceStream(req.Name, img, instType, ramGB, cpuCores, req.DiskGB, req.Autostart, req.SSHKey, req.TemplatePreset, logFn)
+				err = lxdClient.LaunchInstanceStream(lxd.LaunchOptions{
+					Name:           req.Name,
+					Image:          img,
+					Type:           instType,
+					RAMGB:          ramGB,
+					CPUCores:       cpuCores,
+					DiskGB:         req.DiskGB,
+					Autostart:      req.Autostart,
+					SSHKey:         req.SSHKey,
+					TemplatePreset: req.TemplatePreset,
+					StoragePool:    req.StoragePool,
+					Network:        req.Network,
+					Privileged:     req.Privileged,
+					Nesting:        req.Nesting,
+					CPUAllowance:   req.CPUAllowance,
+					MemorySwap:     req.MemorySwap,
+				}, logFn)
 				if err != nil {
 					logFn(fmt.Sprintf("❌ Error: %s", err.Error()))
 					return
@@ -589,7 +845,23 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			err = lxdClient.LaunchInstance(req.Name, img, instType, ramGB, cpuCores, req.DiskGB, req.Autostart, req.SSHKey, req.TemplatePreset)
+			err = lxdClient.LaunchInstance(lxd.LaunchOptions{
+				Name:           req.Name,
+				Image:          img,
+				Type:           instType,
+				RAMGB:          ramGB,
+				CPUCores:       cpuCores,
+				DiskGB:         req.DiskGB,
+				Autostart:      req.Autostart,
+				SSHKey:         req.SSHKey,
+				TemplatePreset: req.TemplatePreset,
+				StoragePool:    req.StoragePool,
+				Network:        req.Network,
+				Privileged:     req.Privileged,
+				Nesting:        req.Nesting,
+				CPUAllowance:   req.CPUAllowance,
+				MemorySwap:     req.MemorySwap,
+			})
 			if err == nil {
 				_ = s.db.LogAuditAction("LAUNCH_LXD", req.Name, fmt.Sprintf("Launched LXD %s '%s' on Master (Image: %s)", instType, req.Name, img))
 			}
@@ -617,6 +889,12 @@ func (s *Server) handleNodeAction(w http.ResponseWriter, r *http.Request) {
 		Autostart:      req.Autostart,
 		SSHKey:         req.SSHKey,
 		TemplatePreset: req.TemplatePreset,
+		StoragePool:    req.StoragePool,
+		Network:        req.Network,
+		Privileged:     req.Privileged,
+		Nesting:        req.Nesting,
+		CPUAllowance:   req.CPUAllowance,
+		MemorySwap:     req.MemorySwap,
 		SnapName:       req.SnapName,
 		SnapEnabled:    req.SnapEnabled,
 		SnapCron:       req.SnapCron,
@@ -784,77 +1062,30 @@ func (s *Server) handleWSDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) startDashboardBroadcaster() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 	for range ticker.C {
-		nodes, err := s.db.GetAllNodes()
-		if err != nil {
-			continue
-		}
-
-		type NodeResponse struct {
-			db.Node
-			Instances []lxd.LXD `json:"instances"`
-			Lxds      []lxd.LXD `json:"lxds"`
-		}
-
-		var result []NodeResponse
-		for _, n := range nodes {
-			insts := []lxd.LXD{}
-			if agent, ok := s.hub.GetAgent(n.ID); ok {
-				n.Status = "online"
-				n.CPUUsagePct = agent.HostStats.CPUUsagePct
-				n.RAMUsedMB = agent.HostStats.RAMUsedMB
-				n.RAMTotalMB = agent.HostStats.RAMTotalMB
-				n.CPUCores = agent.HostStats.CPUCores
-				n.StorageTotalGB = agent.HostStats.StorageTotalGB
-				n.StorageUsedGB = agent.HostStats.StorageUsedGB
-				n.StorageUsagePct = agent.HostStats.StorageUsagePct
-				n.OSName = agent.HostStats.OS
-				n.Kernel = agent.HostStats.Kernel
-				n.Uptime = agent.HostStats.Uptime
-				n.LoadAvg = agent.HostStats.LoadAvg
-				if agent.HostStats.IP != "" {
-					n.IP = agent.HostStats.IP
-				}
-				insts = agent.Instances
-			} else if n.IsMaster {
-				n.Status = "online"
-				client := lxd.NewClient(s.cfg.LXDSocket)
-				stats := client.GetHostStats()
-				n.CPUUsagePct = stats.CPUUsagePct
-				n.RAMUsedMB = stats.RAMUsedMB
-				n.RAMTotalMB = stats.RAMTotalMB
-				n.CPUCores = stats.CPUCores
-				n.StorageTotalGB = stats.StorageTotalGB
-				n.StorageUsedGB = stats.StorageUsedGB
-				n.StorageUsagePct = stats.StorageUsagePct
-				n.OSName = stats.OS
-				n.Kernel = stats.Kernel
-				n.Uptime = stats.Uptime
-				n.LoadAvg = stats.LoadAvg
-				if stats.IP != "" {
-					n.IP = stats.IP
-				}
-				insts, _ = client.ListInstances()
+		if s.hasDashConnections() {
+			payload, err := json.Marshal(s.getClusterSnapshot())
+			if err != nil {
+				continue
 			}
-			result = append(result, NodeResponse{
-				Node:      n,
-				Instances: insts,
-				Lxds:      insts,
+			s.dashConns.Range(func(key, value interface{}) bool {
+				c := key.(*websocket.Conn)
+				_ = c.WriteMessage(websocket.TextMessage, payload)
+				return true
 			})
 		}
-
-		payload, err := json.Marshal(result)
-		if err != nil {
-			continue
-		}
-
-		s.dashConns.Range(func(key, value interface{}) bool {
-			c := key.(*websocket.Conn)
-			_ = c.WriteMessage(websocket.TextMessage, payload)
-			return true
-		})
 	}
+}
+
+func (s *Server) hasDashConnections() bool {
+	has := false
+	s.dashConns.Range(func(key, value interface{}) bool {
+		has = true
+		return false
+	})
+	return has
 }
 
 func (s *Server) handleWSTerminal(w http.ResponseWriter, r *http.Request) {
@@ -1272,6 +1503,9 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		if _, exists := settings["default_disk_gb"]; !exists {
 			settings["default_disk_gb"] = "20"
 		}
+		if _, exists := settings["language"]; !exists {
+			settings["language"] = "en"
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(settings)
 		return
@@ -1315,11 +1549,24 @@ func fileExists(p string) bool {
 }
 
 func (s *Server) handleSystemVersion(w http.ResponseWriter, r *http.Request) {
+	s.versionMu.Lock()
+	defer s.versionMu.Unlock()
+
+	// Cache GitHub API check for 60s so multiple dashboard tabs don't hammer it.
+	if s.versionInfo != nil && time.Since(s.versionAt) < 60*time.Second {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(s.versionInfo)
+		return
+	}
+
 	info, err := updater.CheckForUpdates(s.getRepoPath())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	s.versionInfo = info
+	s.versionAt = time.Now()
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(info)
 }

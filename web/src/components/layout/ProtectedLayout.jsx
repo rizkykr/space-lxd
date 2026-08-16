@@ -6,8 +6,11 @@ import { AddNodeModal } from '../modals/AddNodeModal';
 import { CreateLXDModal } from '../modals/CreateLXDModal';
 import { WelcomeModal } from '../modals/WelcomeModal';
 import { AlertCircle, Check } from 'lucide-react';
+import { wsUrl } from '../../utils/api';
+import { useI18n } from '../../i18n';
 
 export function ProtectedLayout({ user, onLogout }) {
+  const { t } = useI18n();
   const [nodes, setNodes] = useState([]);
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [showCreateLXDModal, setShowCreateLXDModal] = useState(false);
@@ -44,8 +47,39 @@ export function ProtectedLayout({ user, onLogout }) {
 
   useEffect(() => {
     fetchNodes();
-    const interval = setInterval(fetchNodes, 5000);
+    const interval = setInterval(fetchNodes, 10000); // Poll fallback (WS primary)
     return () => clearInterval(interval);
+  }, []);
+
+  // Realtime cluster state push from master WebSocket (best-effort, no-op on failure)
+  useEffect(() => {
+    let socket;
+    let retryTimer;
+    let closed = false;
+
+    const connect = () => {
+      socket = new WebSocket(wsUrl('/ws/dashboard'));
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (Array.isArray(data)) setNodes(data);
+        } catch (e) {}
+      };
+      socket.onclose = () => {
+        if (!closed) retryTimer = setTimeout(connect, 5000);
+      };
+      socket.onerror = () => socket && socket.close();
+    };
+
+    connect();
+    return () => {
+      closed = true;
+      clearTimeout(retryTimer);
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+    };
   }, []);
 
   const handleOpenAddNode = async () => {
@@ -56,7 +90,7 @@ export function ProtectedLayout({ user, onLogout }) {
         setJoinTokenData(data);
         setShowAddNodeModal(true);
       } else {
-        addToast('error', 'Gagal membangkitkan token Joiner');
+        addToast('error', t('addnode.joinFailed'));
       }
     } catch (e) {
       addToast('error', e.message);
@@ -116,3 +150,5 @@ export function ProtectedLayout({ user, onLogout }) {
     </div>
   );
 }
+
+export default ProtectedLayout;

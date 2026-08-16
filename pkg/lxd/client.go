@@ -43,6 +43,8 @@ type HostStats struct {
 	StorageTotalGB  float64 `json:"storage_total_gb"`
 	StorageUsedGB   float64 `json:"storage_used_gb"`
 	StorageUsagePct float64 `json:"storage_usage_pct"`
+	NetRxBytes      uint64  `json:"net_rx_bytes"`
+	NetTxBytes      uint64  `json:"net_tx_bytes"`
 }
 
 type Client struct {
@@ -54,7 +56,7 @@ type Client struct {
 
 func NewClient(socketPath string) *Client {
 	if socketPath == "" {
-		socketPath = "/var/snap/lxd/common/lxd/unix.socket"
+		socketPath = DetectLXDSocket()
 	}
 
 	httpClient := &http.Client{
@@ -84,6 +86,22 @@ func FindLXCBin() string {
 		return p
 	}
 	return "lxc"
+}
+
+// DetectLXDSocket returns the local LXD/Incus daemon socket path,
+// probing the snap, native LXD, and Incus locations in order.
+func DetectLXDSocket() string {
+	candidates := []string{
+		"/var/snap/lxd/common/lxd/unix.socket",
+		"/var/lib/lxd/unix.socket",
+		"/var/lib/incus/unix.socket",
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	return "/var/snap/lxd/common/lxd/unix.socket"
 }
 
 func (c *Client) IsAvailable() bool {
@@ -175,6 +193,8 @@ func (c *Client) GetHostStats() HostStats {
 		}
 	}
 
+	netRx, netTx := getNetCounters()
+
 	return HostStats{
 		Hostname:        hostname,
 		IP:              primaryIP,
@@ -189,7 +209,39 @@ func (c *Client) GetHostStats() HostStats {
 		StorageTotalGB:  storageTotalGB,
 		StorageUsedGB:   storageUsedGB,
 		StorageUsagePct: storagePct,
+		NetRxBytes:      netRx,
+		NetTxBytes:      netTx,
 	}
+}
+
+// getNetCounters sums receive/transmit byte counters across all non-loopback
+// interfaces from /proc/net/dev (used for real-time network rate calculation).
+func getNetCounters() (rx, tx uint64) {
+	data, err := os.ReadFile("/proc/net/dev")
+	if err != nil {
+		return 0, 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if !strings.Contains(line, ":") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		iface := strings.TrimSpace(parts[0])
+		if iface == "lo" {
+			continue
+		}
+		fields := strings.Fields(parts[1])
+		if len(fields) < 9 {
+			continue
+		}
+		if v, err := strconv.ParseUint(fields[0], 10, 64); err == nil {
+			rx += v
+		}
+		if v, err := strconv.ParseUint(fields[8], 10, 64); err == nil {
+			tx += v
+		}
+	}
+	return rx, tx
 }
 
 func (c *Client) ListInstances() ([]LXD, error) {
@@ -563,11 +615,39 @@ func (c *Client) EnsureImageDownloadedWithStream(image string, logFn func(string
 	return lastCopyErr
 }
 
-func (c *Client) LaunchInstance(name, image, instType string, ramGB, cpuCores, diskGB int, autostart bool, sshKey, templatePreset string) error {
-	return c.LaunchInstanceStream(name, image, instType, ramGB, cpuCores, diskGB, autostart, sshKey, templatePreset, nil)
+type LaunchOptions struct {
+	Name           string
+	Image          string
+	Type           string
+	RAMGB          int
+	CPUCores       int
+	DiskGB         int
+	Autostart      bool
+	SSHKey         string
+	TemplatePreset string
+	StoragePool    string
+	Network        string
+	Privileged     bool
+	Nesting        bool
+	CPUAllowance   string
+	MemorySwap     bool
 }
 
-func (c *Client) LaunchInstanceStream(name, image, instType string, ramGB, cpuCores, diskGB int, autostart bool, sshKey, templatePreset string, logFn func(string)) error {
+func (c *Client) LaunchInstance(opts LaunchOptions) error {
+	return c.LaunchInstanceStream(opts, nil)
+}
+
+func (c *Client) LaunchInstanceStream(opts LaunchOptions, logFn func(string)) error {
+	name, image, instType := opts.Name, opts.Image, opts.Type
+	ramGB, cpuCores, diskGB := opts.RAMGB, opts.CPUCores, opts.DiskGB
+	autostart := opts.Autostart
+	sshKey, templatePreset := opts.SSHKey, opts.TemplatePreset
+
+	// Nested containers (Docker/Podman inside LXD) require security.nesting.
+	if templatePreset == "docker" || templatePreset == "nodejs" {
+		opts.Nesting = true
+	}
+
 	lxcBin := FindLXCBin()
 
 	if logFn != nil {
@@ -621,11 +701,46 @@ func (c *Client) LaunchInstanceStream(name, image, instType string, ramGB, cpuCo
 		"launch", "TARGET_IMG_PLACEHOLDER", name,
 		"-c", fmt.Sprintf("limits.memory=%dGB", ramGB),
 		"-c", fmt.Sprintf("limits.cpu=%d", cpuCores),
-		"-c", "security.nesting=true",
-		"-c", "security.syscalls.intercept.mknod=true",
-		"-c", "security.syscalls.intercept.setxattr=true",
 		"-c", fmt.Sprintf("environment.TZ=%s", nodeTZ),
 	}
+
+	if instType == "virtual-machine" {
+		args = append(args, "--vm")
+	}
+
+	if opts.Nesting {
+		args = append(args,
+			"-c", "security.nesting=true",
+			"-c", "security.syscalls.intercept.mknod=true",
+			"-c", "security.syscalls.intercept.setxattr=true",
+		)
+	}
+
+	if opts.Privileged {
+		args = append(args, "-c", "security.privileged=true")
+	}
+
+	if strings.TrimSpace(opts.StoragePool) != "" {
+		args = append(args, "--storage", strings.TrimSpace(opts.StoragePool))
+	}
+
+	if strings.TrimSpace(opts.Network) != "" {
+		args = append(args, "--network", strings.TrimSpace(opts.Network))
+	}
+
+	if strings.TrimSpace(opts.CPUAllowance) != "" {
+		allowance := strings.TrimSpace(opts.CPUAllowance)
+		if !strings.HasSuffix(allowance, "%") {
+			allowance += "%"
+		}
+		args = append(args, "-c", fmt.Sprintf("limits.cpu.allowance=%s", allowance))
+	}
+
+	swapVal := "true"
+	if !opts.MemorySwap {
+		swapVal = "false"
+	}
+	args = append(args, "-c", fmt.Sprintf("limits.memory.swap=%s", swapVal))
 
 	if len(userDataParts) > 1 {
 		cloudConfigStr := strings.Join(userDataParts, "\n")

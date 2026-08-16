@@ -2,6 +2,8 @@ package config
 
 import (
 	"os"
+
+	"lxd-manager-dashboard/pkg/lxd"
 )
 
 type MasterConfig struct {
@@ -35,7 +37,7 @@ func LoadMasterConfig() MasterConfig {
 	}
 	lxdSocket := os.Getenv("LXD_SOCKET")
 	if lxdSocket == "" {
-		lxdSocket = "/var/snap/lxd/common/lxd/unix.socket"
+		lxdSocket = lxd.DetectLXDSocket()
 	}
 	masterPublic := os.Getenv("MASTER_PUBLIC_URL")
 	if masterPublic == "" {
@@ -70,7 +72,7 @@ func LoadAgentConfig() AgentConfig {
 	}
 	lxdSocket := os.Getenv("LXD_SOCKET")
 	if lxdSocket == "" {
-		lxdSocket = "/var/snap/lxd/common/lxd/unix.socket"
+		lxdSocket = lxd.DetectLXDSocket()
 	}
 
 	return AgentConfig{
